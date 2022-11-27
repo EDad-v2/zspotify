@@ -75,6 +75,8 @@ requests.adapters.DEFAULT_RETRIES = 10
 REINTENT_DOWNLOAD = 30
 IS_PODCAST = False
 
+genre_cache = dict()
+
 # miscellaneous functions for general use
 
 
@@ -576,6 +578,19 @@ def get_artist_info(artist_id):
         print(artist_id,info)
 
 
+def lookup_genre(artist_id):
+    '''get genre by artist_id from API'''
+    info = get_artist_info(artist_id)    
+    return conv_artist_format(info['genres'])
+
+
+def get_genre(artist_id):
+    '''return cached genre, else lookup, cache and return'''
+    if artist_id not in genre_cache:
+        genre_cache[artist_id] = lookup_genre(artist_id)
+    return genre_cache[artist_id]
+
+
 def get_song_info(song_id):
     """ Retrieves metadata for downloaded songs """
     token = SESSION.tokens().get("user-read-email")
@@ -914,8 +929,9 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
         artists, album_name, name, image_url, release_year, disc_number, track_number, scraped_song_id, is_playable, artist_id = get_song_info(
             track_id_str)
 
-        info = get_artist_info(artist_id)
-        genre = conv_artist_format(info['genres'])
+        #info = get_artist_info(artist_id)
+        #genre = conv_artist_format(info['genres'])
+        genre = get_genre(artist_id)
  
         _artist = artists[0]
         if prefix:
