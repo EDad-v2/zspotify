@@ -56,6 +56,7 @@ ALBUM_IN_FILENAME = True # Puts album name in filename, otherwise name is (artis
 SKIP_EXISTING_FILES = True
 SKIP_PREVIOUSLY_DOWNLOADED = True
 MUSIC_FORMAT = os.getenv('MUSIC_FORMAT') or "mp3" # "mp3" | "ogg"
+USE_VBR = True # Encodes mp3 with variable bitrate, for smaller sizes. Does not affect ogg
 FORCE_PREMIUM = False # set to True if not detecting your premium account automatically
 RAW_AUDIO_AS_IS = False # set to False if you wish you save the raw audio without re-encoding it.
 if os.getenv('RAW_AUDIO_AS_IS') != None and os.getenv('RAW_AUDIO_AS_IS') != "y":
@@ -620,33 +621,33 @@ def check_premium():
 def convert_audio_format(fromfilename, tofilename):
     """ Converts raw audio into playable mp3 or ogg vorbis """
     global MUSIC_FORMAT
+    global USE_VBR
     if not USE_FFMPEG:
         '''Use pydub and ffmpeg to encode to wav, then to mp3 or ogg'''
         raw_audio = AudioSegment.from_file(fromfilename, format="ogg",
                                         frame_rate=44100, channels=2, sample_width=2)
         if QUALITY == AudioQuality.VERY_HIGH:
-            bitrate = "0" if MUSIC_FORMAT == "mp3" else "9" # VBR 0 ~= 320kbps for MP3, VBR 9 ~= 320kbps for Vorbis
+            bitrate = "0" if MUSIC_FORMAT == "mp3" and USE_VBR else "320k" # VBR 0 ~= 320kbps for MP3
         else:
-            bitrate = "4" if MUSIC_FORMAT == "mp3" else "5" # VBR 4 ~= 160kbps for MP3, VBR 5 ~= 160kbps for Vorbis
-        raw_audio.export(filename, format=MUSIC_FORMAT,  parameters=["-fps_mode", "passthrough", "-c:v", "copy", "-c:a", "libmp3lame", "-q:a", bitrate])
-        # -c:v and -fps_mode params prevent fmmpeg from trying to encode the album art as a high FPS video stream
+            bitrate = "4" if MUSIC_FORMAT == "mp3" and USE_VBR else "160k" # VBR 4 ~= 160kbps for MP3
+        raw_audio.export(filename, format=MUSIC_FORMAT, parameters=["-q:a", bitrate])
 
     else:
         '''Use ffmpeg-python to encode to mp3. If ogg, copy raw stream into ogg container.'''
         if MUSIC_FORMAT == "mp3":
             if QUALITY == AudioQuality.VERY_HIGH:
-                bitrate = "0"
+                bitrate = "0" if USE_VBR else "320k"
             else:
-                bitrate = "4"
+                bitrate = "4" if USE_VBR else "160k"
             (
                 ffmpeg
                 .input(fromfilename)
-                .output(tofilename, acodec='libmp3lame', fps_mode="passthrough", vcodec="copy", aq=bitrate)
+                .output(tofilename, acodec='libmp3lame', aq=bitrate)
                 .global_args('-loglevel', 'quiet')
                 .run()
             )
 
-        elif MUSIC_FORMAT == "ogg": # since we are using acodec copy a bitrate is not needed
+        elif MUSIC_FORMAT == "ogg": # No bitrate parameters are needed - just copying data
             (
                 ffmpeg
                 .input(fromfilename)
