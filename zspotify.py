@@ -625,23 +625,28 @@ def convert_audio_format(fromfilename, tofilename):
         raw_audio = AudioSegment.from_file(fromfilename, format="ogg",
                                         frame_rate=44100, channels=2, sample_width=2)
         if QUALITY == AudioQuality.VERY_HIGH:
-            bitrate = "320k"
+            bitrate = "0" if MUSIC_FORMAT == "mp3" else "9" # VBR 0 ~= 320kbps for MP3, VBR 9 ~= 320kbps for Vorbis
         else:
-            bitrate = "160k"
-        raw_audio.export(tofilename, format=MUSIC_FORMAT, bitrate=bitrate)
+            bitrate = "4" if MUSIC_FORMAT == "mp3" else "5" # VBR 4 ~= 160kbps for MP3, VBR 5 ~= 160kbps for Vorbis
+        raw_audio.export(filename, format=MUSIC_FORMAT,  parameters=["-vsync", 0, "-c:v", "copy", "-c:a", "libmp3lame", "-q:a", bitrate])
+        # -c:v and -vsync params prevent fmmpeg from trying to encode the album art as a high FPS video stream
 
     else:
         '''Use ffmpeg-python to encode to mp3. If ogg, copy raw stream into ogg container.'''
         if MUSIC_FORMAT == "mp3":
+            if QUALITY == AudioQuality.VERY_HIGH:
+                bitrate = "0"
+            else:
+                bitrate = "4"
             (
                 ffmpeg
                 .input(fromfilename)
                 .output(tofilename, acodec='libmp3lame')
-                .global_args('-loglevel', 'quiet')
+                .global_args('-loglevel', 'quiet', "-vsync", 0, "-c:v", "copy", "-c:a", "libmp3lame", "-q:a", bitrate)
                 .run()
             )      
 
-        elif MUSIC_FORMAT == "ogg":
+        elif MUSIC_FORMAT == "ogg": # since we are using acodec copy a bitrate is not needed
             (
                 ffmpeg
                 .input(fromfilename)
