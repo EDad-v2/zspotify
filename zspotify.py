@@ -652,7 +652,7 @@ def convert_audio_format(fromfilename, tofilename):
                 (
                     ffmpeg
                     .input(fromfilename)
-                    .output(tofilename, acodec='libmp3lame', ab=bitrate)
+                    .output(tofilename, acodec='libmp3lame')
                     .global_args('-loglevel', 'quiet')
                     .run()
                 )
