@@ -945,7 +945,7 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
 
                     if REALTIME_WAIT and MULTI_TRACK:
                         realtime_wait(realtime_started, duration_ms)
-                    if not OVERRIDE_AUTO_WAIT:
+                    if not OVERRIDE_AUTO_WAIT and not REALTIME_WAIT:
                         time.sleep(ANTI_BAN_WAIT_TIME)
 
                     add_to_archive(scraped_song_id, os.path.basename(filename), artists[0], name)
