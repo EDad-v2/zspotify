@@ -92,6 +92,16 @@ def antiban_wait():
         time.sleep(1)
 
 
+def convert_seconds(seconds):
+    seconds = seconds % (24 * 3600)
+    hour = seconds // 3600
+    seconds %= 3600
+    minutes = seconds // 60
+    seconds %= 60
+        
+    return "%d:%02d:%02d" % (hour, minutes, seconds)       
+
+
 def realtime_wait(realtime_started: int, duration_ms: int):       
     if REALTIME_WAIT:
         current_time = time.time() - realtime_started
@@ -99,7 +109,8 @@ def realtime_wait(realtime_started: int, duration_ms: int):
         if duration_ms > current_time:
             need_wait = int(duration_ms - current_time)
             for i in range(need_wait)[::-1]:
-                print("\rEmulating playing track in realtime. Resuming in %d/%d second(s)..." % (i + 1, int(duration_ms)), end="")
+                #print("\rEmulating playing track in realtime. Resuming in %d/%d second(s)..." % (i + 1, int(duration_ms)), end="")
+                print("\rEmulating playing track in realtime. Resuming in " + convert_seconds(i + 1) + " ...", end="")
                 time.sleep(1)
                
 
