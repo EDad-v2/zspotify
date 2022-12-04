@@ -43,6 +43,7 @@ CONFIG_DIR = user_config_dir("ZSpotify")
 ROOT_PATH = os.path.expanduser("~/Music/ZSpotify Music/")
 ROOT_PODCAST_PATH = os.path.expanduser("~/Music/ZSpotify Podcasts/")
 ALBUM_IN_FILENAME = True # Puts album name in filename, otherwise name is (artist) - (track name).
+REALTIME_WAIT = False
 
 SKIP_EXISTING_FILES = True
 SKIP_PREVIOUSLY_DOWNLOADED = True
@@ -90,6 +91,17 @@ def antiban_wait():
         print("\rWait for Next Download in %d second(s)..." % (i + 1), end="")
         time.sleep(1)
 
+
+def realtime_wait(realtime_started: int, duration_ms: int):       
+    if REALTIME_WAIT:
+        current_time = time.time() - realtime_started
+        duration_ms = duration_ms/1000
+        if duration_ms > current_time:
+            need_wait = int(duration_ms - current_time)
+            for i in range(need_wait)[::-1]:
+                print("\rEmulating playing track in realtime. Resuming in %d/%d second(s)..." % (i + 1, int(duration_ms)), end="")
+                time.sleep(1)
+               
 
 def sanitize_data(value):
     """ Returns given string with problematic removed """
@@ -147,7 +159,8 @@ def login():
 
 def client():
     """ Connects to spotify to perform query's and get songs to download """
-    global QUALITY, SESSION
+    global QUALITY, SESSION, MULTI_TRACK, REALTIME_WAIT
+    MULTI_TRACK = False
     splash()
 
     token = SESSION.tokens().get("user-read-email")
@@ -160,6 +173,10 @@ def client():
         print("[ DETECTED FREE ACCOUNT - USING HIGH QUALITY ]\n\n")
         QUALITY = AudioQuality.HIGH
 
+    for arg in sys.argv:
+        if arg == '-rt' or arg == '--realtime':
+            REALTIME_WAIT = True
+
     if len(sys.argv) > 1:
         if sys.argv[1] == "-p" or sys.argv[1] == "--playlist":
             download_from_user_playlist()
@@ -169,7 +186,10 @@ def client():
             else:
                 print("With the flag playlist_id you must pass the playlist_id and the name of the folder where you will have the songs. Usually these name is the name of the playlist itself.")
         elif sys.argv[1] == "-ls" or sys.argv[1] == "--liked-songs":
-            for song in get_saved_tracks(token_for_saved):
+            saved_tracks = get_saved_tracks(token_for_saved)
+            if len(saved_tracks) > 1:
+                MULTI_TRACK = True
+            for song in saved_tracks:
                 if not song['track']['name']:
                     print(
                         "###   SKIPPING:  SONG DOES NOT EXISTS ON SPOTIFY ANYMORE   ###")
@@ -188,6 +208,8 @@ def client():
                 download_album(album_id_str)
             elif playlist_id_str is not None:
                 playlist_songs = get_playlist_songs(token, playlist_id_str)
+                if len(playlist_songs) > 1:
+                    MULTI_TRACK = True
                 name, creator = get_playlist_info(token, playlist_id_str)
                 for song in playlist_songs:
                     download_track(song['track']['id'],
@@ -213,6 +235,8 @@ def client():
             download_album(album_id_str)
         elif playlist_id_str is not None:
             playlist_songs = get_playlist_songs(token, playlist_id_str)
+            if len(playlist_songs) > 1:
+                MULTI_TRACK = True
             name, creator = get_playlist_info(token, playlist_id_str)
             for song in playlist_songs:
                 download_track(song['track']['id'],
@@ -425,6 +449,8 @@ def download_episode(episode_id_str):
 
 def search(search_term):
     """ Searches Spotify's API for relevant data """
+    global MULTI_TRACK
+    MULTI_TRACK = False
     token = SESSION.tokens().get("user-read-email")
 
     resp = requests.get(
@@ -509,6 +535,8 @@ def search(search_term):
                 playlist_choice = playlists[position -
                                             total_tracks - total_albums - 1]
                 playlist_songs = get_playlist_songs(token, playlist_choice['id'])
+                if len(playlist_songs) > 1:
+                    MULTI_TRACK = True
                 for song in playlist_songs:
                     if song['track']['id'] is not None:
                         download_track(song['track']['id'], sanitize_data(
@@ -576,8 +604,9 @@ def get_song_info(song_id):
         track_number = info['tracks'][0]['track_number']
         scraped_song_id = info['tracks'][0]['id']
         is_playable = info['tracks'][0]['is_playable']
+        duration_ms = info['tracks'][0]['duration_ms']
 
-        return artists, album_name, name, image_url, release_year, disc_number, track_number, scraped_song_id, is_playable
+        return artists, album_name, name, image_url, release_year, disc_number, track_number, scraped_song_id, is_playable, duration_ms
     except Exception as e:
         print("###   get_song_info - FAILED TO QUERY METADATA   ###")
         print(e)
@@ -818,7 +847,7 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
     global ROOT_PATH, SKIP_EXISTING_FILES, SKIP_PREVIOUSLY_DOWNLOADED, MUSIC_FORMAT, RAW_AUDIO_AS_IS, ANTI_BAN_WAIT_TIME, OVERRIDE_AUTO_WAIT, ALBUM_IN_FILENAME
     try:
     	# TODO: ADD disc_number IF > 1 
-        artists, album_name, name, image_url, release_year, disc_number, track_number, scraped_song_id, is_playable = get_song_info(
+        artists, album_name, name, image_url, release_year, disc_number, track_number, scraped_song_id, is_playable, duration_ms = get_song_info(
             track_id_str)
 
         _artist = artists[0]
@@ -859,7 +888,7 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
 
                     track_id = TrackId.from_base62(track_id_str)
                     # print("###   FOUND SONG:", song_name, "   ###")
-
+                    realtime_started = time.time()
                     stream = SESSION.content_feeder().load(
                         track_id, VorbisOnlyAudioQuality(QUALITY), False, None)
                     # print("###   DOWNLOADING RAW AUDIO   ###")
@@ -903,6 +932,8 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
                                            release_year, disc_number, track_number, track_id_str)
                             set_music_thumbnail(filename, image_url)
 
+                    if REALTIME_WAIT and MULTI_TRACK:
+                        realtime_wait(realtime_started, duration_ms)
                     if not OVERRIDE_AUTO_WAIT:
                         time.sleep(ANTI_BAN_WAIT_TIME)
 
@@ -917,9 +948,14 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
 
 def download_album(album):
     """ Downloads songs from an album """
+    global MULTI_TRACK
+
+    MULTI_TRACK = False
     token = SESSION.tokens().get("user-read-email")
     artist, album_release_date, album_name, total_tracks = get_album_name(token, album)
     tracks = get_album_tracks(token, album)
+    if len(tracks) > 1:
+        MULTI_TRACK = True
     print(f"\n  {artist} - ({album_release_date}) {album_name} [{total_tracks}]")
     disc_number_flag = False
     for track in tracks:
@@ -957,10 +993,16 @@ def get_albums_artist(access_token, artists_id):
 
 def download_playlist(playlists, playlist_choice):
     """Downloads all the songs from a playlist"""
+    global MULTI_TRACK
+
+    MULTI_TRACK = False    
     token = SESSION.tokens().get("user-read-email")
 
     playlist_songs = get_playlist_songs(
         token, playlists[int(playlist_choice) - 1]['id'])
+    
+    if len(playlist_songs) > 1:
+        MULTI_TRACK = True
 
     for song in playlist_songs:
         if song['track']['id'] is not None:
@@ -970,9 +1012,14 @@ def download_playlist(playlists, playlist_choice):
 
 def download_playlist_by_id(playlist_id, playlist_name):
     """Downloads all the songs from a playlist using playlist id"""
+    global MULTI_TRACK
+
+    MULTI_TRACK = False
     token = SESSION.tokens().get("user-read-email")
 
     playlist_songs = get_playlist_songs(token, playlist_id)
+    if len(playlist_songs) > 1:
+        MULTI_TRACK = True
 
     for song in playlist_songs:
         if song['track']['id'] is not None:
