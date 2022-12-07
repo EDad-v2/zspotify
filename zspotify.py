@@ -53,6 +53,7 @@ CONFIG_DIR = user_config_dir("ZSpotify")
 ROOT_PATH = os.path.expanduser("~/Music/ZSpotify Music/")
 ROOT_PODCAST_PATH = os.path.expanduser("~/Music/ZSpotify Podcasts/")
 ALBUM_IN_FILENAME = True # Puts album name in filename, otherwise name is (artist) - (track name).
+REALTIME_WAIT = False
 SKIP_EXISTING_FILES = True
 SKIP_PREVIOUSLY_DOWNLOADED = True
 MUSIC_FORMAT = os.getenv('MUSIC_FORMAT') or "mp3" # "mp3" | "ogg"
@@ -69,6 +70,7 @@ OVERRIDE_AUTO_WAIT = False
 CHUNK_SIZE = 50000
 
 CREDENTIALS = os.path.join(CONFIG_DIR, "credentials.json")
+print(CREDENTIALS)
 
 LIMIT = 50 
 
@@ -101,6 +103,25 @@ def antiban_wait():
     for i in range(ANTI_BAN_WAIT_TIME_ALBUMS)[::-1]:
         print("\rWait for Next Download in %d second(s)..." % (i + 1), end="")
         time.sleep(1)
+
+
+def convert_seconds(seconds):
+    seconds = seconds % (24 * 3600)
+    hour = seconds // 3600
+    seconds %= 3600
+    minutes = seconds // 60
+    seconds %= 60
+        
+    return "%d:%02d:%02d" % (hour, minutes, seconds)       
+
+
+def realtime_wait(realtime_started, duration_ms, total_size, downloaded):
+    time_start = realtime_started
+    delta_real = time.time() - time_start
+    delta_want = (downloaded / total_size) * (duration_ms/1000)
+    if delta_want > delta_real:
+        #need_wait = int(delta_want - delta_real)
+        time.sleep(delta_want - delta_real)
 
 
 def sanitize_data(value):
@@ -159,7 +180,7 @@ def login():
 
 def client():
     """ Connects to spotify to perform query's and get songs to download """
-    global QUALITY, SESSION
+    global QUALITY, SESSION, REALTIME_WAIT
     splash()
 
     token = SESSION.tokens().get("user-read-email")
@@ -171,6 +192,10 @@ def client():
     else:
         print("[ DETECTED FREE ACCOUNT - USING HIGH QUALITY ]\n\n")
         QUALITY = AudioQuality.HIGH
+
+    for arg in sys.argv:
+        if arg == '-rt' or arg == '--realtime':
+            REALTIME_WAIT = True
 
     if len(sys.argv) > 1:
         if sys.argv[1] == "-p" or sys.argv[1] == "--playlist":
@@ -406,9 +431,12 @@ def download_episode(episode_id_str):
         downloaded = 0
         _CHUNK_SIZE = CHUNK_SIZE
         fail = 0
+        bar_txt = episode_name
+        if REALTIME_WAIT:
+            bar_txt = "\033[1;37;44m REALTIME \033[m " + bar_txt
 
         with open(tempfile, 'wb') as file, tqdm(
-                desc=episode_name,
+                desc=bar_txt,
                 total=total_size,
                 unit='B',
                 unit_scale=True,
@@ -619,8 +647,9 @@ def get_song_info(song_id):
         track_number = info['tracks'][0]['track_number']
         scraped_song_id = info['tracks'][0]['id']
         is_playable = info['tracks'][0]['is_playable']
+        duration_ms = info['tracks'][0]['duration_ms']
 
-        return artists, album_name, name, image_url, release_year, disc_number, track_number, scraped_song_id, is_playable, artist_id
+        return artists, album_name, name, image_url, release_year, disc_number, track_number, scraped_song_id, is_playable, artist_id, duration_ms
     except Exception as e:
         print("###   get_song_info - FAILED TO QUERY METADATA   ###")
         print(e)
@@ -956,7 +985,7 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
     META_GENRE = False    
     try:
     	# TODO: ADD disc_number IF > 1 
-        artists, album_name, name, image_url, release_year, disc_number, track_number, scraped_song_id, is_playable, artist_id = get_song_info(
+        artists, album_name, name, image_url, release_year, disc_number, track_number, scraped_song_id, is_playable, artist_id, duration_ms = get_song_info(
             track_id_str)
 
         #info = get_artist_info(artist_id)
@@ -1001,7 +1030,7 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
 
                     track_id = TrackId.from_base62(track_id_str)
                     # print("###   FOUND SONG:", song_name, "   ###")
-
+                    realtime_started = time.time()
                     stream = SESSION.content_feeder().load(
                         track_id, VorbisOnlyAudioQuality(QUALITY), False, None)
 
@@ -1011,9 +1040,21 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
                     downloaded = 0
                     _CHUNK_SIZE = CHUNK_SIZE
                     fail = 0
-
+                    if REALTIME_WAIT:
+                        bitrate = 0
+                        if QUALITY == AudioQuality.NORMAL:
+                            bitrate = 96
+                        elif QUALITY == AudioQuality.HIGH:
+                            bitrate = 160
+                        elif QUALITY == AudioQuality.VERY_HIGH:
+                            bitrate = 320
+                        #print("Bitrate is: " + str(bitrate * 125))
+                        _CHUNK_SIZE = bitrate * 125
+                        bar_txt = song_name
+                        if REALTIME_WAIT:
+                            bar_txt = "\033[1;37;44m REALTIME \033[m " + bar_txt
                     with open(tempfile, 'wb') as file, tqdm(
-                            desc=song_name,
+                            desc=bar_txt,
                             total=total_size,
                             unit='B',
                             unit_scale=True,
@@ -1024,6 +1065,8 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
                             data = stream.input_stream.stream().read(_CHUNK_SIZE)
 
                             downloaded += len(data)
+                            if REALTIME_WAIT:
+                                realtime_wait(realtime_started, duration_ms, total_size, downloaded)                            
                             bar.update(file.write(data))                           
                             #print(f"[{total_size}][{_CHUNK_SIZE}] [{len(data)}] [{total_size - downloaded}] [{downloaded}]")
                             if (total_size - downloaded) < _CHUNK_SIZE:
@@ -1047,7 +1090,7 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
                             set_music_thumbnail(filename, image_url)
                         META_GENRE = False 
  
-                    if not OVERRIDE_AUTO_WAIT:
+                    if not OVERRIDE_AUTO_WAIT and not REALTIME_WAIT:
                         time.sleep(ANTI_BAN_WAIT_TIME)
 
                     add_to_archive(scraped_song_id, os.path.basename(filename), artists[0], name)
@@ -1066,15 +1109,18 @@ def download_album(album):
     tracks = get_album_tracks(token, album)
     print(f"\n  {artist} - ({album_release_date}) {album_name} [{total_tracks}]")
     disc_number_flag = False
+    bar_txt = "Download Album"
+    if REALTIME_WAIT:
+        bar_txt = "\033[1;37;44m REALTIME \033[m " + bar_txt
     for track in tracks:
         if track['disc_number'] > 1:
             disc_number_flag = True
     if disc_number_flag: 
-        for n, track in tqdm(enumerate(tracks, start=1), unit_scale=True, unit='Song', total=len(tracks)):
+        for n, track in tqdm(enumerate(tracks, start=1), unit_scale=True, unit='Song', total=len(tracks), desc=bar_txt):
             disc_number = str(track['disc_number']).zfill(2)
             download_track(track['id'], os.path.join(artist, f"{artist} - {album_release_date} - {album_name}", f"CD {disc_number}"),prefix=True, prefix_value=str(n), disable_progressbar=True)
     else: 
-        for n, track in tqdm(enumerate(tracks, start=1), unit_scale=True, unit='Song', total=len(tracks)):
+        for n, track in tqdm(enumerate(tracks, start=1), unit_scale=True, unit='Song', total=len(tracks), desc=bar_txt):
             download_track(track['id'], os.path.join(artist, f"{artist} - {album_release_date} - {album_name}"),prefix=True, prefix_value=str(n), disable_progressbar=True)
 
 def download_artist_albums(artist):
