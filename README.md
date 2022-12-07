@@ -21,6 +21,11 @@ Fork of https://github.com/Footsiefat/zspotify
 
 Spotify song downloader without injecting into the windows client
 
+## This Branch is customed:
+This branch is intended for testing.  It can and will behave differently than Zspotify upstream:
+* [GitHub](https://github.com/jsavargas/zspotify)
+This branch contains tweaks and cherry picked pull requests that I want to play with.
+
 ![](images/image01.png)
 
 ![](images/image02.png)
