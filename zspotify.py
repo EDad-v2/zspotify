@@ -75,6 +75,8 @@ requests.adapters.DEFAULT_RETRIES = 10
 REINTENT_DOWNLOAD = 30
 IS_PODCAST = False
 
+genre_cache = dict()
+
 # miscellaneous functions for general use
 
 
@@ -576,6 +578,19 @@ def get_artist_info(artist_id):
         print(artist_id,info)
 
 
+def lookup_genre(artist_id):
+    '''get genre by artist_id from API'''
+    info = get_artist_info(artist_id)    
+    return conv_artist_format(info['genres'])
+
+
+def get_genre(artist_id):
+    '''return cached genre, else lookup, cache and return'''
+    if artist_id not in genre_cache:
+        genre_cache[artist_id] = lookup_genre(artist_id)
+    return genre_cache[artist_id]
+
+
 def get_song_info(song_id):
     """ Retrieves metadata for downloaded songs """
     token = SESSION.tokens().get("user-read-email")
@@ -840,13 +855,27 @@ def get_album_name(access_token, album_id):
     else: return resp['artists'][0]['name'], resp['release_date'],sanitize_data(resp['name']),resp['total_tracks']
 
 
-def get_artist_albums(access_token, artist_id):
+def get_artist_albums(access_token, artists_id):
     """ Returns artist's albums """
-    headers = {'Authorization': f'Bearer {access_token}'}
-    resp = requests.get(
-        f'https://api.spotify.com/v1/artists/{artist_id}/albums', headers=headers).json()
-    # Return a list each album's id
-    return [resp['items'][i]['id'] for i in range(len(resp['items']))]
+
+    albums = []
+    offset = 0
+    limit = 50
+    include_groups = 'album,compilation'
+
+    while True:
+        headers = {'Authorization': f'Bearer {access_token}'}
+        params = {'limit': limit, 'include_groups': include_groups, 'offset': offset}
+
+        resp = requests.get(
+            f'https://api.spotify.com/v1/artists/{artists_id}/albums', headers=headers, params=params).json()
+
+        offset += limit
+        albums.extend(resp['items'])
+
+        if len(resp['items']) < limit:
+            break
+    return albums
 
 # Extra functions directly related to our saved tracks
 
@@ -914,8 +943,9 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
         artists, album_name, name, image_url, release_year, disc_number, track_number, scraped_song_id, is_playable, artist_id = get_song_info(
             track_id_str)
 
-        info = get_artist_info(artist_id)
-        genre = conv_artist_format(info['genres'])
+        #info = get_artist_info(artist_id)
+        #genre = conv_artist_format(info['genres'])
+        genre = get_genre(artist_id)
  
         _artist = artists[0]
         if prefix:
@@ -1035,8 +1065,14 @@ def download_artist_albums(artist):
     """ Downloads albums of an artist """
     token = SESSION.tokens().get("user-read-email")
     albums = get_artist_albums(token, artist)
-    for album_id in albums:
-        download_album(album_id)
+    total_albums = str(len(albums))
+    print("Total Artist Albums to download: " + str(len(albums)) + "\n")
+
+    for i in range(len(albums)):
+        print("\n\nDownloading: " + str(i + 1) + "/" + total_albums)
+        download_album(albums[i]['id'])
+        antiban_wait()
+
 
 def get_albums_artist(access_token, artists_id):
     """ returns list of albums in a artist """
