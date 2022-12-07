@@ -56,7 +56,7 @@ Python packages:
 
 ```
 Command line usage:
-  python zspotify.py                              Loads search prompt to find then download a specific track, album or playlist
+  python zspotify.py [ link ]                     If no link is provided, it loads a search prompt to find then download a specific track, album or playlist
 
 Extra command line options:
   -p, --playlist       Downloads a saved playlist from your account
@@ -69,7 +69,7 @@ Special hardcoded options:
   SKIP_EXISTING_FILES Set this to False if you want ZSpotify to overwrite files with the same name rather than skipping the song
 
   MUSIC_FORMAT        Set this to "ogg" if you would rather that format audio over "mp3"
-  RAW_AUDIO_AS_IS     Set this to True to only stream the audio to a file and do no re-encoding or post processing
+  RAW_AUDIO_AS_IS     Set this to "n" to re-encode to mp3
   
   FORCE_PREMIUM       Set this to True if ZSpotify isn't automatically detecting that you are using a premium account
   
@@ -79,6 +79,9 @@ Special hardcoded options:
 
 
 ## **Changelog:**
+
+**v1.9.4 (14 Oct 2022)**
+- add cover 640x640
 
 **v1.9.3 (30 Sep 2022)**
 - add KeyboardInterrupt control - Control + C
