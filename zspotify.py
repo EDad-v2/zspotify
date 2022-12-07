@@ -1040,6 +1040,7 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
                     downloaded = 0
                     _CHUNK_SIZE = CHUNK_SIZE
                     fail = 0
+                    bar_txt = song_name
                     if REALTIME_WAIT:
                         bitrate = 0
                         if QUALITY == AudioQuality.NORMAL:
@@ -1050,9 +1051,7 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
                             bitrate = 320
                         #print("Bitrate is: " + str(bitrate * 125))
                         _CHUNK_SIZE = bitrate * 125
-                        bar_txt = song_name
-                        if REALTIME_WAIT:
-                            bar_txt = "\033[1;37;44m REALTIME \033[m " + bar_txt
+                        bar_txt = "\033[1;37;44m REALTIME \033[m " + bar_txt
                     with open(tempfile, 'wb') as file, tqdm(
                             desc=bar_txt,
                             total=total_size,
