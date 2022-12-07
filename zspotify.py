@@ -70,8 +70,6 @@ OVERRIDE_AUTO_WAIT = False
 CHUNK_SIZE = 50000
 
 CREDENTIALS = os.path.join(CONFIG_DIR, "credentials.json")
-print(CREDENTIALS)
-
 LIMIT = 50 
 
 requests.adapters.DEFAULT_RETRIES = 10
