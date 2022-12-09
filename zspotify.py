@@ -75,6 +75,8 @@ LIMIT = 50
 requests.adapters.DEFAULT_RETRIES = 10
 REINTENT_DOWNLOAD = 30
 IS_PODCAST = False
+ALBUM_DIR_SHORT = True
+SPLIT_ALBUM_CDS = False
 
 genre_cache = dict()
 
@@ -990,17 +992,23 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
         #genre = conv_artist_format(info['genres'])
         genre = get_genre(artist_id)
  
-        _artist = artists[0]
+        _artist = artists[0]           
         if prefix:
             _track_number = str(track_number).zfill(2)
             song_name = f'{_artist} - {album_name} - {_track_number}. {name}.{MUSIC_FORMAT}' 
-            filename = os.path.join(ROOT_PATH, extra_paths, song_name)
+            filename = os.path.join(ROOT_PATH, extra_paths, song_name) 
         elif ALBUM_IN_FILENAME:
             song_name = f'{_artist} - {album_name} - {name}.{MUSIC_FORMAT}'
             filename = os.path.join(ROOT_PATH, extra_paths, song_name)
         else:
             song_name = f'{_artist} - {name}.{MUSIC_FORMAT}'
             filename = os.path.join(ROOT_PATH, extra_paths, song_name)
+
+        if prefix and not SPLIT_ALBUM_CDS and MULTI_CDS:
+            _track_number = str(disc_number) + str(track_number).zfill(2)
+            song_name = f'{_track_number} - {name}.{MUSIC_FORMAT}' 
+            filename = os.path.join(ROOT_PATH, extra_paths, song_name)
+
         check_all_time = scraped_song_id in get_previously_downloaded()
         tempfile = os.path.join(ROOT_PATH, extra_paths, song_name[:-4] + "-vorbis.raw")
 
@@ -1101,8 +1109,12 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
 
 def download_album(album):
     """ Downloads songs from an album """
+    global MULTI_CDS
     token = SESSION.tokens().get("user-read-email")
     artist, album_release_date, album_name, total_tracks = get_album_name(token, album)
+    album_dir_str = f"{artist} - {album_release_date} - {album_name}"
+    if ALBUM_DIR_SHORT:
+        album_dir_str = f"{album_name}"
     tracks = get_album_tracks(token, album)
     print(f"\n  {artist} - ({album_release_date}) {album_name} [{total_tracks}]")
     disc_number_flag = False
@@ -1111,14 +1123,22 @@ def download_album(album):
         bar_txt = "\033[1;37;44m REALTIME \033[m " + bar_txt
     for track in tracks:
         if track['disc_number'] > 1:
-            disc_number_flag = True
-    if disc_number_flag: 
-        for n, track in tqdm(enumerate(tracks, start=1), unit_scale=True, unit='Song', total=len(tracks), desc=bar_txt):
-            disc_number = str(track['disc_number']).zfill(2)
-            download_track(track['id'], os.path.join(artist, f"{artist} - {album_release_date} - {album_name}", f"CD {disc_number}"),prefix=True, prefix_value=str(n), disable_progressbar=True)
+            disc_number_flag = True            
+    if disc_number_flag:
+        MULTI_CDS = True
+        if SPLIT_ALBUM_CDS:
+            for n, track in tqdm(enumerate(tracks, start=1), unit_scale=True, unit='Song', total=len(tracks), desc=bar_txt):
+                disc_number = str(track['disc_number']).zfill(2)
+                download_track(track['id'], os.path.join(artist, album_dir_str, f"CD {disc_number}"),prefix=True, prefix_value=str(n), disable_progressbar=True)
+
+        else:
+            for n, track in tqdm(enumerate(tracks, start=1), unit_scale=True, unit='Song', total=len(tracks), desc=bar_txt):
+                download_track(track['id'], os.path.join(artist, album_dir_str),prefix=True, prefix_value=str(n), disable_progressbar=True)
+
+        MULTI_CDS = False            
     else: 
         for n, track in tqdm(enumerate(tracks, start=1), unit_scale=True, unit='Song', total=len(tracks), desc=bar_txt):
-            download_track(track['id'], os.path.join(artist, f"{artist} - {album_release_date} - {album_name}"),prefix=True, prefix_value=str(n), disable_progressbar=True)
+            download_track(track['id'], os.path.join(artist, album_dir_str),prefix=True, prefix_value=str(n), disable_progressbar=True)
 
 def download_artist_albums(artist):
     """ Downloads albums of an artist """
