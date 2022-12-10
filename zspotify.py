@@ -77,6 +77,8 @@ REINTENT_DOWNLOAD = 30
 IS_PODCAST = False
 ALBUM_DIR_SHORT = True
 SPLIT_ALBUM_CDS = False
+PLAYLIST_SONG_ALBUMS = False
+MULTI_CDS = False # not for humans to change!
 
 genre_cache = dict()
 
@@ -125,8 +127,11 @@ def realtime_wait(realtime_started, duration_ms, total_size, downloaded):
 
 
 def sanitize_data(value):
-    """ Returns given string with problematic removed """
+    """ Returns given string with probl/ematic removed """
     global sanitize
+    if "AC/DC" in value:
+        value = value.replace("/", "̸") # replace forward slash with U+0338
+
     for i in sanitize:
         value = value.replace(i, "")
     return value.replace("|", "-")
@@ -180,7 +185,7 @@ def login():
 
 def client():
     """ Connects to spotify to perform query's and get songs to download """
-    global QUALITY, SESSION, REALTIME_WAIT
+    global QUALITY, SESSION, REALTIME_WAIT, PLAYLIST_SONG_ALBUMS, SPLIT_ALBUM_CDS
     splash()
 
     token = SESSION.tokens().get("user-read-email")
@@ -196,6 +201,10 @@ def client():
     for arg in sys.argv:
         if arg == '-rt' or arg == '--realtime':
             REALTIME_WAIT = True
+        if arg == '-dpa' or arg == '--download_playlist_albums':
+            PLAYLIST_SONG_ALBUMS = True
+        if arg == 'split' or arg == 'split_album_cds':
+            SPLIT_ALBUM_CDS = True
 
     if len(sys.argv) > 1:
         if sys.argv[1] == "-p" or sys.argv[1] == "--playlist":
@@ -224,12 +233,13 @@ def client():
             elif album_id_str is not None:
                 download_album(album_id_str)
             elif playlist_id_str is not None:
-                playlist_songs = get_playlist_songs(token, playlist_id_str)
-                name, creator = get_playlist_info(token, playlist_id_str)
-                for song in playlist_songs:
-                    download_track(song['track']['id'],
-                                   sanitize_data(name) + "/")
-                    print("\n")
+                #playlist_songs = get_playlist_songs(token, playlist_id_str)
+                name, creator = get_playlist_info(token, playlist_id_str)                
+                #for song in playlist_songs:
+                #    download_track(song['track']['id'],
+                #                   sanitize_data(name) + "/")
+                #    print("\n")
+                download_playlist_by_id(playlist_id_str, name) # download_playlist_by_id(), can replace above
             elif episode_id_str is not None:
                 download_episode(episode_id_str)
             elif show_id_str is not None:
@@ -995,7 +1005,8 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
         _artist = artists[0]           
         if prefix:
             _track_number = str(track_number).zfill(2)
-            song_name = f'{_artist} - {album_name} - {_track_number}. {name}.{MUSIC_FORMAT}' 
+            #song_name = f'{_artist} - {album_name} - {_track_number}. {name}.{MUSIC_FORMAT}' 
+            song_name = f'{_track_number} - {name}.{MUSIC_FORMAT}' 
             filename = os.path.join(ROOT_PATH, extra_paths, song_name) 
         elif ALBUM_IN_FILENAME:
             song_name = f'{_artist} - {album_name} - {name}.{MUSIC_FORMAT}'
@@ -1171,26 +1182,60 @@ def get_albums_artist(access_token, artists_id):
 def download_playlist(playlists, playlist_choice):
     """Downloads all the songs from a playlist"""
     token = SESSION.tokens().get("user-read-email")
+    print("download_playlist:\nplaylists: " + playlists + "\n")
 
     playlist_songs = get_playlist_songs(
         token, playlists[int(playlist_choice) - 1]['id'])
+    print(json.dumps(playlist_songs, indent=2))
 
     for song in playlist_songs:
-        if song['track']['id'] is not None:
-            download_track(song['track']['id'], sanitize_data(
-                playlists[int(playlist_choice) - 1]['name'].strip()) + "/")
-        print("\n")
+        if PLAYLIST_SONG_ALBUMS:
+            print("PLAYLIST_SONG_ALBUMS selected. Get entire albums based off of playlist.")
+        else:
+            if song['track']['id'] is not None:
+                download_track(song['track']['id'], sanitize_data(
+                    playlists[int(playlist_choice) - 1]['name'].strip()) + "/")
+            print("\n")
 
 def download_playlist_by_id(playlist_id, playlist_name):
     """Downloads all the songs from a playlist using playlist id"""
     token = SESSION.tokens().get("user-read-email")
 
     playlist_songs = get_playlist_songs(token, playlist_id)
-
+    total_songs = len(playlist_songs)
+    song_index = 1
     for song in playlist_songs:
-        if song['track']['id'] is not None:
-            download_track(song['track']['id'], sanitize_data(playlist_name.strip()) + "/")
+        track_id = song['track']['id']
+        song_name = song['track']['name']
+        album_id = song['track']['album']['id']
+        album_name = song['track']['album']['name']
+        artist_name = song['track']['album']['artists'][0]['name']
+
+        # Simple pre-check of downloaded. A long playlist resumed after failure
+        # can cause too many api hits in rapid succession.
+        check_all_time = track_id in get_previously_downloaded()
+        if check_all_time and SKIP_PREVIOUSLY_DOWNLOADED:
+            print("GET PLAYLIST SONGS * PRE-CHECK\n")
+            print("###   SKIPPING: " + song_name + " (SONG ALREADY DOWNLOADED ONCE)   ###\n")
+
+        elif PLAYLIST_SONG_ALBUMS: # Download all albums of playlist songs.
+            if track_id is not None:
+                print("PLAYLIST_SONG_ALBUMS selected. Get entire albums based off of the \"" + playlist_name + "\" playlist.\n")
+                print(str(song_index) + "/" + str(total_songs) + " Downloading - Album: \"" + album_name + "\" by artist: " + artist_name + "\n")
+                download_album(album_id)
+            else:
+                print(str(song_index) + "/" + str(total_songs) + " Downloading - Album: \"" + album_name + "\" by artist: " + artist_name + "\n")
+                print(str(song_index) + "/" + str(total_songs) + song_name + " not available, skipping album\n")
+
+        else: # Download songs only from playlist into folder with playlist name.
+            if track_id is not None:
+                print(str(song_index) + "/" + str(total_songs) + " Downloading \"" + song_name + "\" from the \"" + playlist_name + "\" playlist.\n")
+                download_track(track_id, sanitize_data(playlist_name.strip()) + "/")
+            else:
+                print(str(song_index) + "/" + str(total_songs) + song_name + " not available, skipping\n")
         print("\n")
+
+        song_index += 1
 
 def download_from_user_playlist():
     """ Select which playlist(s) to download """
