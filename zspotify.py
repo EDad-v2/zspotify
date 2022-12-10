@@ -130,7 +130,7 @@ def sanitize_data(value):
     """ Returns given string with probl/ematic removed """
     #global sanitize
     if "AC/DC" in value:
-        value = value.replace("/", "̸") # replace forward slash with U+0338
+        value = value.replace("/", "⚡") # replace forward slash with ⚡
 
     for i in sanitize:
         value = value.replace(i, "")
@@ -1124,6 +1124,8 @@ def download_album(album):
     global MULTI_CDS
     token = SESSION.tokens().get("user-read-email")
     artist, album_release_date, album_name, total_tracks = get_album_name(token, album)
+    artist = sanitize_data(artist)
+    album_name = sanitize_data(album_name)
     album_dir_str = f"{artist} - {album_release_date} - {album_name}"
     if ALBUM_DIR_SHORT:
         album_dir_str = f"{album_name}"
