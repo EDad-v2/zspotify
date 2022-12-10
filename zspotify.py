@@ -128,7 +128,7 @@ def realtime_wait(realtime_started, duration_ms, total_size, downloaded):
 
 def sanitize_data(value):
     """ Returns given string with probl/ematic removed """
-    global sanitize
+    #global sanitize
     if "AC/DC" in value:
         value = value.replace("/", "̸") # replace forward slash with U+0338
 
@@ -410,7 +410,8 @@ def get_show_episodes(access_token, show_id_str):
 
 
 def download_episode(episode_id_str):
-    global ROOT_PODCAST_PATH, MUSIC_FORMAT, RAW_AUDIO_AS_IS, SKIP_EXISTING_FILES, SKIP_PREVIOUSLY_DOWNLOADED, IS_PODCAST, META_GENRE
+    #global ROOT_PODCAST_PATH, MUSIC_FORMAT, RAW_AUDIO_AS_IS, SKIP_EXISTING_FILES, SKIP_PREVIOUSLY_DOWNLOADED, IS_PODCAST, META_GENRE
+    global IS_PODCAST, META_GENRE
     IS_PODCAST = True
     META_GENRE = False
 
@@ -667,15 +668,15 @@ def get_song_info(song_id):
 
 def check_premium():
     """ If user has spotify premium return true """
-    global FORCE_PREMIUM
+    #global FORCE_PREMIUM
     return bool((SESSION.get_user_attribute("type") == "premium") or FORCE_PREMIUM)
 
 
 # Functions directly related to modifying the downloaded audio and its metadata
 def convert_audio_format(fromfilename, tofilename):
     """ Converts raw audio into playable mp3 or ogg vorbis """
-    global MUSIC_FORMAT
-    global USE_VBR
+    #global MUSIC_FORMAT
+    #global USE_VBR
     if not USE_FFMPEG:
         '''Use pydub and ffmpeg to encode to wav, then to mp3 or ogg'''
         raw_audio = AudioSegment.from_file(fromfilename, format="ogg",
@@ -957,7 +958,7 @@ def get_saved_tracks(access_token):
 def get_previously_downloaded() -> list[str]:
     """ Returns list of all time downloaded songs, sourced from the hidden archive file located at the download
     location. """
-    global ROOT_PATH, ROOT_PODCAST_PATH
+    #global ROOT_PATH, ROOT_PODCAST_PATH
 
     ids = []
     if not IS_PODCAST:
@@ -990,8 +991,8 @@ def add_to_archive(song_id: str, filename: str, author_name: str, song_name: str
 # Functions directly related to downloading stuff
 def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value='', disable_progressbar=False):
     """ Downloads raw song audio from Spotify """
-    global ROOT_PATH, SKIP_EXISTING_FILES, SKIP_PREVIOUSLY_DOWNLOADED, MUSIC_FORMAT, RAW_AUDIO_AS_IS, ANTI_BAN_WAIT_TIME, OVERRIDE_AUTO_WAIT, ALBUM_IN_FILENAME, META_GENRE
-    
+    #global ROOT_PATH, SKIP_EXISTING_FILES, SKIP_PREVIOUSLY_DOWNLOADED, MUSIC_FORMAT, RAW_AUDIO_AS_IS, ANTI_BAN_WAIT_TIME, OVERRIDE_AUTO_WAIT, ALBUM_IN_FILENAME, META_GENRE
+    global META_GENRE
     META_GENRE = False    
     try:
     	# TODO: ADD disc_number IF > 1 
@@ -1270,7 +1271,8 @@ def download_from_user_playlist():
 # Core functions here
 
 def check_raw():
-    global RAW_AUDIO_AS_IS, MUSIC_FORMAT
+    #global RAW_AUDIO_AS_IS, MUSIC_FORMAT
+    global MUSIC_FORMAT
     if RAW_AUDIO_AS_IS:
         MUSIC_FORMAT = "ogg"
 
