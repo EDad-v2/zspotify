@@ -162,12 +162,12 @@ def login():
     """ Authenticates with Spotify and saves credentials to a file """
     global SESSION
 
+    #if os.path.isfile(CREDENTIALS):
+    #    shutil.copyfile(CREDENTIALS, 'credentials.json')
     if os.path.isfile(CREDENTIALS):
-        shutil.copyfile(CREDENTIALS, 'credentials.json')
-
-    if os.path.isfile("credentials.json"):
         try:
-            SESSION = Session.Builder().stored_file().create()
+            conf = Session.Configuration.Builder().set_stored_credential_file(CREDENTIALS).set_store_credentials(False).build()
+            SESSION = Session.Builder(conf).stored_file().create()
             return
         except RuntimeError:
             pass
@@ -175,9 +175,12 @@ def login():
         user_name = input("Username: ")
         password = getpass()
         try:
-            SESSION = Session.Builder().user_pass(user_name, password).create()
             os.makedirs(CONFIG_DIR, exist_ok=True)
-            shutil.copyfile('credentials.json', CREDENTIALS)
+            conf = Session.Configuration.Builder().set_stored_credential_file(CREDENTIALS).build()
+            #SESSION = Session.Builder().user_pass(user_name, password).create()
+            SESSION = Session.Builder(conf).user_pass(user_name, password).create()
+            #os.makedirs(CONFIG_DIR, exist_ok=True)
+            #shutil.copyfile('credentials.json', CREDENTIALS)
             return
         except RuntimeError:
             pass
