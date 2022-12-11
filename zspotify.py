@@ -79,8 +79,8 @@ ALBUM_DIR_SHORT = True
 SPLIT_ALBUM_CDS = False
 PLAYLIST_SONG_ALBUMS = False
 MULTI_CDS = False # not for humans to change!
-
 genre_cache = dict()
+CUSTOM_NAMING = False
 
 # miscellaneous functions for general use
 
@@ -185,8 +185,10 @@ def login():
 
 def client():
     """ Connects to spotify to perform query's and get songs to download """
-    global QUALITY, SESSION, REALTIME_WAIT, PLAYLIST_SONG_ALBUMS, SPLIT_ALBUM_CDS
+    global QUALITY, SESSION, REALTIME_WAIT, PLAYLIST_SONG_ALBUMS, SPLIT_ALBUM_CDS, CUSTOM_NAMING, CUSTOM_PATH
     splash()
+    CUSTOM_PATH = False
+    CUSTOM_NAMING = False
 
     token = SESSION.tokens().get("user-read-email")
     token_for_saved = SESSION.tokens().get("user-library-read")
@@ -203,8 +205,19 @@ def client():
             REALTIME_WAIT = True
         if arg == '-dpa' or arg == '--download_playlist_albums':
             PLAYLIST_SONG_ALBUMS = True
-        if arg == 'split' or arg == 'split_album_cds':
+        if arg == '-split' or arg == '--split_album_cds':
             SPLIT_ALBUM_CDS = True
+        if arg == '-o' or arg == '--out':
+            arg_index = sys.argv.index(arg)
+            try:
+                if arg_index < len(sys.argv):             
+                    CUSTOM_PATH = sys.argv[arg_index + 1]
+                    CUSTOM_NAMING = True
+            except:
+                print(f'{arg} must be followed with a custom path string')
+                print("\n\tExample: " + arg + " \"{ROOT_PATH}/{ARTIST}/{ALBUM}/{ARTIST} - {NAME}.{MUSIC_FORMAT}\"\n")
+                print("\tString should be in quotes.")
+                print("\nOutput path and filename unchanged.")
 
     if len(sys.argv) > 1:
         if sys.argv[1] == "-p" or sys.argv[1] == "--playlist":
@@ -628,7 +641,8 @@ def get_genre(artist_id):
     '''return cached genre, else lookup, cache and return'''
     if artist_id not in genre_cache:
         genre_cache[artist_id] = lookup_genre(artist_id)
-    return genre_cache[artist_id]
+
+    return genre_cache[artist_id] # 
 
 
 def get_song_info(song_id):
@@ -1003,7 +1017,38 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
         #genre = conv_artist_format(info['genres'])
         genre = get_genre(artist_id)
  
-        _artist = artists[0]           
+        _artist = artists[0]
+        if not SPLIT_ALBUM_CDS and MULTI_CDS:
+            _track_number = str(disc_number) + str(track_number).zfill(2)
+        else:
+            _track_number = str(track_number).zfill(2)
+
+        if CUSTOM_NAMING:
+            if "{ROOT_PATH}" in CUSTOM_PATH:
+                join_root_path = True
+
+            # Remove after testing
+            # MUSIC_FORMAT=ogg python zspotify.py https://open.spotify.com/album/4vu7F6h90Br1ZtYYaqfITy -o "{ROOT_PATH}/{ARTIST}/{ALBUM} ({YEAR})/{TRACK} - {TITLE}.{EXT}"
+            song_name2 = CUSTOM_PATH.format(ROOT_PATH = '',
+                                           ARTIST = _artist,
+                                           ALBUM = album_name,
+                                           TITLE = name,
+                                           YEAR = release_year,
+                                           DISC = disc_number,
+                                           TRACK = _track_number,
+                                           EXT = MUSIC_FORMAT
+                                           )
+            song_name2 = song_name2.split("/")
+            if not join_root_path:
+                song_name2 = os.path.join(*song_name2)
+            else:
+                song_name2 = os.path.join(ROOT_PATH, *song_name2)
+
+            print("Test song name: ", song_name2)
+        
+        else:
+            print("Custom naming isn't active")
+         
         if prefix:
             _track_number = str(track_number).zfill(2)
             #song_name = f'{_artist} - {album_name} - {_track_number}. {name}.{MUSIC_FORMAT}' 
