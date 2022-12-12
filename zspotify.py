@@ -162,28 +162,27 @@ def login():
     """ Authenticates with Spotify and saves credentials to a file """
     global SESSION
 
-    #if os.path.isfile(CREDENTIALS):
-    #    shutil.copyfile(CREDENTIALS, 'credentials.json')
     if os.path.isfile(CREDENTIALS):
         try:
             conf = Session.Configuration.Builder().set_stored_credential_file(CREDENTIALS).set_store_credentials(False).build()
             SESSION = Session.Builder(conf).stored_file().create()
             return
-        except RuntimeError:
-            pass
+        except BaseException as e:
+
+            print("\n\nLogin error! Is your stored credential file corrupt?\n")
+            print("Hopefully re-logging will resolve this.\n")
+            print(f"Delete {CREDENTIALS} file if error persists.\n")
+            print(f"[!] ERROR {e} \n")
     while True:
         user_name = input("Username: ")
         password = getpass()
         try:
             os.makedirs(CONFIG_DIR, exist_ok=True)
             conf = Session.Configuration.Builder().set_stored_credential_file(CREDENTIALS).build()
-            #SESSION = Session.Builder().user_pass(user_name, password).create()
             SESSION = Session.Builder(conf).user_pass(user_name, password).create()
-            #os.makedirs(CONFIG_DIR, exist_ok=True)
-            #shutil.copyfile('credentials.json', CREDENTIALS)
             return
-        except RuntimeError:
-            pass
+        except BaseException as e:
+            print(f"Login error, Username or Pass incorrect?\n[!] ERROR {e} \n")
 
 
 def client():
@@ -249,13 +248,8 @@ def client():
             elif album_id_str is not None:
                 download_album(album_id_str)
             elif playlist_id_str is not None:
-                #playlist_songs = get_playlist_songs(token, playlist_id_str)
-                name, creator = get_playlist_info(token, playlist_id_str)                
-                #for song in playlist_songs:
-                #    download_track(song['track']['id'],
-                #                   sanitize_data(name) + "/")
-                #    print("\n")
-                download_playlist_by_id(playlist_id_str, name) # download_playlist_by_id(), can replace above
+                name, creator = get_playlist_info(token, playlist_id_str) 
+                download_playlist_by_id(playlist_id_str, sanitize_data(name)) # download_playlist_by_id(), can replace above
             elif episode_id_str is not None:
                 download_episode(episode_id_str)
             elif show_id_str is not None:
