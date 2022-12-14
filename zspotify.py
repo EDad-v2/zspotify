@@ -14,17 +14,17 @@ import platform
 import re
 import sys
 import time
-import shutil
+#import shutil
 from getpass import getpass
 import datetime
 
 import requests
 from librespot.audio.decoders import AudioQuality, VorbisOnlyAudioQuality
-from librespot.core import Session
+#from librespot.core import Session
 from librespot.metadata import TrackId, EpisodeId
 
 from tqdm import tqdm
-from appdirs import user_config_dir
+#from appdirs import user_config_dir
 
 # Change to True to use mutagen directly rather than through music_tag layer.
 USE_MUTAGEN = True
@@ -45,42 +45,12 @@ else:
     from pydub import AudioSegment
 
 
-SESSION: Session = None
-sanitize = ["\\", "/", ":", "*", "?", "'", "<", ">", '"']
+
+from ini import Zcfg, MUSIC_FORMAT, IS_PODCAST, genre_cache, REALTIME_WAIT, CREDENTIALS, SPLIT_ALBUM_CDS, MULTI_CDS, login
 
 
-CONFIG_DIR = user_config_dir("ZSpotify")
-ROOT_PATH = os.path.expanduser("~/Music/ZSpotify Music/")
-ROOT_PODCAST_PATH = os.path.expanduser("~/Music/ZSpotify Podcasts/")
-ALBUM_IN_FILENAME = True # Puts album name in filename, otherwise name is (artist) - (track name).
-REALTIME_WAIT = False
-SKIP_EXISTING_FILES = True
-SKIP_PREVIOUSLY_DOWNLOADED = True
-MUSIC_FORMAT = os.getenv('MUSIC_FORMAT') or "mp3" # "mp3" | "ogg"
-USE_VBR = True # Encodes mp3 with variable bitrate, for smaller sizes. Does not affect ogg
-FORCE_PREMIUM = False # set to True if not detecting your premium account automatically
-RAW_AUDIO_AS_IS = False # set to False if you wish you save the raw audio without re-encoding it.
-if os.getenv('RAW_AUDIO_AS_IS') != None and os.getenv('RAW_AUDIO_AS_IS') != "y":
-    RAW_AUDIO_AS_IS = False
-# This is how many seconds ZSpotify waits between downloading tracks so spotify doesn't get out the ban hammer
-ANTI_BAN_WAIT_TIME = 5
-ANTI_BAN_WAIT_TIME_ALBUMS = 30
-# Set this to True to not wait at all between tracks and just go balls to the wall
-OVERRIDE_AUTO_WAIT = False
-CHUNK_SIZE = 50000
-
-CREDENTIALS = os.path.join(CONFIG_DIR, "credentials.json")
-LIMIT = 50 
-
-requests.adapters.DEFAULT_RETRIES = 10
-REINTENT_DOWNLOAD = 30
-IS_PODCAST = False
-ALBUM_DIR_SHORT = True
-SPLIT_ALBUM_CDS = False
-PLAYLIST_SONG_ALBUMS = False
-MULTI_CDS = False # not for humans to change!
-genre_cache = dict()
-CUSTOM_NAMING = False
+#SESSION: Session = None
+SESSION = login()
 
 # miscellaneous functions for general use
 
@@ -102,7 +72,7 @@ def wait(seconds: int = 3):
 
 def antiban_wait():
     """ Pause between albums for a set number of seconds """
-    for i in range(ANTI_BAN_WAIT_TIME_ALBUMS)[::-1]:
+    for i in range(Zcfg.get_anti_ban_wait_time_albums())[::-1]:
         print("\rWait for Next Download in %d second(s)..." % (i + 1), end="")
         time.sleep(1)
 
@@ -128,7 +98,7 @@ def realtime_wait(realtime_started, duration_ms, total_size, downloaded):
 
 def sanitize_data(value):
     """ Returns given string with probl/ematic removed """
-    #global sanitize
+    sanitize = ["\\", "/", ":", "*", "?", "'", "<", ">", '"']
     if "AC/DC" in value:
         value = value.replace("/", "⚡") # replace forward slash with ⚡
 
@@ -158,41 +128,16 @@ def splash():
 
 
 # two mains functions for logging in and doing client stuff
-def login():
-    """ Authenticates with Spotify and saves credentials to a file """
-    global SESSION
-
-    if os.path.isfile(CREDENTIALS):
-        try:
-            conf = Session.Configuration.Builder().set_stored_credential_file(CREDENTIALS).set_store_credentials(False).build()
-            SESSION = Session.Builder(conf).stored_file().create()
-            return
-        except BaseException as e:
-
-            print("\n\nLogin error! Is your stored credential file corrupt?\n")
-            print("Hopefully re-logging will resolve this.\n")
-            print(f"Delete {CREDENTIALS} file if error persists.\n")
-            print(f"[!] ERROR {e} \n")
-    while True:
-        user_name = input("Username: ")
-        password = getpass()
-        try:
-            os.makedirs(CONFIG_DIR, exist_ok=True)
-            conf = Session.Configuration.Builder().set_stored_credential_file(CREDENTIALS).build()
-            SESSION = Session.Builder(conf).user_pass(user_name, password).create()
-            return
-        except BaseException as e:
-            print(f"Login error, Username or Pass incorrect?\n[!] ERROR {e} \n")
-
 
 def client():
     """ Connects to spotify to perform query's and get songs to download """
-    global QUALITY, SESSION, REALTIME_WAIT, PLAYLIST_SONG_ALBUMS, SPLIT_ALBUM_CDS, CUSTOM_NAMING, CUSTOM_PATH
+    global QUALITY, REALTIME_WAIT, PLAYLIST_SONG_ALBUMS, SPLIT_ALBUM_CDS, CUSTOM_NAMING, CUSTOM_PATH
     splash()
     CUSTOM_PATH = False
     CUSTOM_NAMING = False
 
     token = SESSION.tokens().get("user-read-email")
+    print("Client token")
     token_for_saved = SESSION.tokens().get("user-library-read")
 
     if check_premium():
@@ -402,7 +347,7 @@ def get_show_episodes(access_token, show_id_str):
     """ returns episodes of a show """
     episodes = []
     offset = 0
-    limit = 50
+    limit = Zcfg.get_limit()
 
     while True:
         headers = {'Authorization': f'Bearer {access_token}'}
@@ -420,24 +365,24 @@ def get_show_episodes(access_token, show_id_str):
 
 
 def download_episode(episode_id_str):
-    #global ROOT_PODCAST_PATH, MUSIC_FORMAT, RAW_AUDIO_AS_IS, SKIP_EXISTING_FILES, SKIP_PREVIOUSLY_DOWNLOADED, IS_PODCAST, META_GENRE
     global IS_PODCAST, META_GENRE
+    MUSIC_FORMAT = Zcfg.get_music_format()
     IS_PODCAST = True
     META_GENRE = False
 
     podcast_name, episode_name, image_url, release_date, scraped_episode_id = get_episode_info(episode_id_str)
     check_all_time = episode_id_str in get_previously_downloaded()
     episode_filename = f'{podcast_name}-{episode_name}.{MUSIC_FORMAT}'
-    filename = os.path.join(ROOT_PODCAST_PATH, podcast_name, episode_filename)
-    tempfile = os.path.join(ROOT_PODCAST_PATH, podcast_name, episode_filename[:-4] + "-vorbis.raw")
+    filename = os.path.join(Zcfg.get_root_podcast_path(), podcast_name, episode_filename)
+    tempfile = os.path.join(Zcfg.get_root_podcast_path(), podcast_name, episode_filename[:-4] + "-vorbis.raw")
  
     if podcast_name is None:
         print("###   SKIPPING: (EPISODE NOT FOUND)   ###")
 
-    elif os.path.isfile(filename) and os.path.getsize(filename) and SKIP_EXISTING_FILES:
+    elif os.path.isfile(filename) and os.path.getsize(filename) and Zcfg.get_skip_existing_files:
         print("###   SKIPPING: (EPISODE ALREADY EXISTS) :", episode_name, "   ###")
 
-    elif check_all_time and SKIP_PREVIOUSLY_DOWNLOADED:
+    elif check_all_time and Zcfg.get_skip_previously_downloaded():
         print('###   SKIPPING: ' + episode_name + ' (EPISODE ALREADY DOWNLOADED ONCE)   ###')
 
     else:
@@ -445,12 +390,12 @@ def download_episode(episode_id_str):
         stream = SESSION.content_feeder().load(
             episode_id, VorbisOnlyAudioQuality(QUALITY), False, None)
 
-        os.makedirs(os.path.join(ROOT_PODCAST_PATH, podcast_name),exist_ok=True)
+        os.makedirs(os.path.join(Zcfg.get_root_podcast_path(), podcast_name),exist_ok=True)
 
         total_size = stream.input_stream.size
         data_left = total_size
         downloaded = 0
-        _CHUNK_SIZE = CHUNK_SIZE
+        _CHUNK_SIZE = Zcfg.get_chunk_size()
         fail = 0
         bar_txt = episode_name
         if REALTIME_WAIT:
@@ -472,13 +417,13 @@ def download_episode(episode_id_str):
                 #print(f"[{total_size}][{_CHUNK_SIZE}] [{len(data)}] [{total_size - downloaded}] [{downloaded}]")
                 if len(data) == 0 : 
                     fail += 1
-                if fail > REINTENT_DOWNLOAD:
+                if fail > Zcfg.get_reintent_download():
                     break
 
             file.close() # Windoze needs.
 
             convert_audio_format(tempfile, filename)
-            if not RAW_AUDIO_AS_IS:
+            if not Zcfg.get_raw_audio_as_is():
                 if USE_MUTAGEN:
                     set_audio_tags_mutagen(filename, "", episode_name, podcast_name, release_date, "", "", scraped_episode_id, image_url)
                 else:
@@ -496,7 +441,7 @@ def search(search_term):
     resp = requests.get(
         "https://api.spotify.com/v1/search",
         {
-            "limit": LIMIT,
+            "limit": Zcfg.get_limit(),
             "offset": "0",
             "q": search_term,
             "type": "track,album,playlist,artist"
@@ -620,7 +565,8 @@ def get_artist_info(artist_id):
     """ Retrieves metadata for downloaded songs """
     token = SESSION.tokens().get("user-read-email")
     try:
-        info = json.loads(requests.get("https://api.spotify.com/v1/artists/" + artist_id, headers={"Authorization": "Bearer %s" % token}).text)
+        info = json.loads(requests.get("https://api.spotify.com/v1/artists/" +
+                          artist_id, headers={"Authorization": "Bearer %s" % token}).text)
         return info
     except Exception as e:
         print("###   get_artist_info - FAILED TO QUERY METADATA   ###")
@@ -679,34 +625,32 @@ def get_song_info(song_id):
 
 def check_premium():
     """ If user has spotify premium return true """
-    #global FORCE_PREMIUM
-    return bool((SESSION.get_user_attribute("type") == "premium") or FORCE_PREMIUM)
+    return bool((SESSION.get_user_attribute("type") == "premium") or Zcfg.get_force_premium())
 
 
 # Functions directly related to modifying the downloaded audio and its metadata
 def convert_audio_format(fromfilename, tofilename):
     """ Converts raw audio into playable mp3 or ogg vorbis """
-    #global MUSIC_FORMAT
-    #global USE_VBR
+    MUSIC_FORMAT = Zcfg.get_music_format()
     if not USE_FFMPEG:
         '''Use pydub and ffmpeg to encode to wav, then to mp3 or ogg'''
         raw_audio = AudioSegment.from_file(fromfilename, format="ogg",
                                         frame_rate=44100, channels=2, sample_width=2)
         if QUALITY == AudioQuality.VERY_HIGH:
-            bitrate = "0" if MUSIC_FORMAT == "mp3" and USE_VBR else "320k" # VBR 0 ~= 320kbps for MP3
+            bitrate = "0" if MUSIC_FORMAT == "mp3" and Zcfg.get_use_vbr() else "320k" # VBR 0 ~= 320kbps for MP3
         else:
-            bitrate = "4" if MUSIC_FORMAT == "mp3" and USE_VBR else "160k" # VBR 4 ~= 160kbps for MP3
-        bitrateFlag = "-q:a" if USE_VBR and MUSIC_FORMAT == "mp3" else "-b:a" # VBR and CBR use different ffmpeg flags
+            bitrate = "4" if MUSIC_FORMAT == "mp3" and Zcfg.get_use_vbr() else "160k" # VBR 4 ~= 160kbps for MP3
+        bitrateFlag = "-q:a" if Zcfg.get_use_vbr() and MUSIC_FORMAT == "mp3" else "-b:a" # VBR and CBR use different ffmpeg flags
         raw_audio.export(tofilename, format=MUSIC_FORMAT, parameters=[bitrateFlag, bitrate])
 
     else:
         '''Use ffmpeg-python to encode to mp3. If ogg, copy raw stream into ogg container.'''
         if MUSIC_FORMAT == "mp3":
             if QUALITY == AudioQuality.VERY_HIGH:
-                bitrate = "0" if USE_VBR else "320k"
+                bitrate = "0" if Zcfg.get_use_vbr() else "320k"
             else:
-                bitrate = "4" if USE_VBR else "160k"
-            if USE_VBR:
+                bitrate = "4" if Zcfg.get_use_vbr() else "160k"
+            if Zcfg.get_use_vbr():
                 (
                     ffmpeg
                     .input(fromfilename)
@@ -732,7 +676,7 @@ def convert_audio_format(fromfilename, tofilename):
                 .run()
             )
 
-    if not RAW_AUDIO_AS_IS:
+    if not Zcfg.get_raw_audio_as_is():
         if os.path.exists(fromfilename):
             os.remove(fromfilename)
 
@@ -768,6 +712,7 @@ def set_audio_tags(filename, artists, name, album_name, release_year, disc_numbe
 
 def set_audio_tags_mutagen(filename, artists, name, album_name, release_year, disc_number, track_number, track_id_str, image_url):
     """ sets music_tag metadata using mutagen """
+    MUSIC_FORMAT = Zcfg.get_music_format()
     artist = conv_artist_format(artists)
     check_various_artists = "Various Artists" in filename
     if check_various_artists:
@@ -841,7 +786,7 @@ def conv_artist_format(artists):
 def get_all_playlists(access_token):
     """ Returns list of users playlists """
     playlists = []
-    limit = 50
+    limit = Zcfg.get_limit()
     offset = 0
 
     while True:
@@ -891,7 +836,7 @@ def get_album_tracks(access_token, album_id):
     """ Returns album tracklist """
     songs = []
     offset = 0
-    limit = 50
+    limit = Zcfg.get_limit()
     include_groups = 'album,compilation'
 
     while True:
@@ -927,7 +872,7 @@ def get_artist_albums(access_token, artists_id):
 
     albums = []
     offset = 0
-    limit = 50
+    limit = Zcfg.get_limit
     include_groups = 'album,compilation'
 
     while True:
@@ -951,7 +896,7 @@ def get_saved_tracks(access_token):
     """ Returns user's saved tracks """
     songs = []
     offset = 0
-    limit = 50
+    limit = Zcfg.get_limit()
 
     while True:
         headers = {'Authorization': f'Bearer {access_token}'}
@@ -969,13 +914,12 @@ def get_saved_tracks(access_token):
 def get_previously_downloaded() -> list[str]:
     """ Returns list of all time downloaded songs, sourced from the hidden archive file located at the download
     location. """
-    #global ROOT_PATH, ROOT_PODCAST_PATH
 
     ids = []
     if not IS_PODCAST:
-        archive_path = os.path.join(ROOT_PATH, '.song_archive')
+        archive_path = os.path.join(Zcfg.get_root_path(), '.song_archive')
     else:
-        archive_path = os.path.join(ROOT_PODCAST_PATH, '.episode_archive')
+        archive_path = os.path.join(Zcfg.get_root_podcast_path(), '.episode_archive')
 
     if os.path.exists(archive_path):
         with open(archive_path, 'r', encoding='utf-8') as f:
@@ -987,9 +931,9 @@ def add_to_archive(song_id: str, filename: str, author_name: str, song_name: str
     """ Adds song id to all time installed songs archive """
     archive_path = ""
     if not IS_PODCAST:
-        archive_path = os.path.join(os.path.dirname(__file__), ROOT_PATH, '.song_archive')
+        archive_path = os.path.join(os.path.dirname(__file__), Zcfg.get_root_path(), '.song_archive')
     else:
-        archive_path = os.path.join(os.path.dirname(__file__), ROOT_PODCAST_PATH, '.episode_archive')
+        archive_path = os.path.join(os.path.dirname(__file__), Zcfg.get_root_podcast_path(), '.episode_archive')
 
     if os.path.exists(archive_path):
         with open(archive_path, 'a', encoding='utf-8') as file:
@@ -1002,7 +946,7 @@ def add_to_archive(song_id: str, filename: str, author_name: str, song_name: str
 # Functions directly related to downloading stuff
 def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value='', disable_progressbar=False):
     """ Downloads raw song audio from Spotify """
-    #global ROOT_PATH, SKIP_EXISTING_FILES, SKIP_PREVIOUSLY_DOWNLOADED, MUSIC_FORMAT, RAW_AUDIO_AS_IS, ANTI_BAN_WAIT_TIME, OVERRIDE_AUTO_WAIT, ALBUM_IN_FILENAME, META_GENRE
+    MUSIC_FORMAT = Zcfg.get_music_format()
     global META_GENRE
     META_GENRE = False    
     try:
@@ -1039,7 +983,7 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
             if not join_root_path:
                 song_name2 = os.path.join(*song_name2)
             else:
-                song_name2 = os.path.join(ROOT_PATH, *song_name2)
+                song_name2 = os.path.join(Zcfg.get_root_path(), *song_name2)
 
             print("Test song name: ", song_name2)
         
@@ -1050,21 +994,21 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
             _track_number = str(track_number).zfill(2)
             #song_name = f'{_artist} - {album_name} - {_track_number}. {name}.{MUSIC_FORMAT}' 
             song_name = f'{_track_number} - {name}.{MUSIC_FORMAT}' 
-            filename = os.path.join(ROOT_PATH, extra_paths, song_name) 
-        elif ALBUM_IN_FILENAME:
+            filename = os.path.join(Zcfg.get_root_path(), extra_paths, song_name) 
+        elif Zcfg.get_album_in_file_name:
             song_name = f'{_artist} - {album_name} - {name}.{MUSIC_FORMAT}'
-            filename = os.path.join(ROOT_PATH, extra_paths, song_name)
+            filename = os.path.join(Zcfg.get_root_path(), extra_paths, song_name)
         else:
             song_name = f'{_artist} - {name}.{MUSIC_FORMAT}'
-            filename = os.path.join(ROOT_PATH, extra_paths, song_name)
+            filename = os.path.join(Zcfg.get_root_path(), extra_paths, song_name)
 
         if prefix and not SPLIT_ALBUM_CDS and MULTI_CDS:
             _track_number = str(disc_number) + str(track_number).zfill(2)
             song_name = f'{_track_number} - {name}.{MUSIC_FORMAT}' 
-            filename = os.path.join(ROOT_PATH, extra_paths, song_name)
+            filename = os.path.join(Zcfg.get_root_path(), extra_paths, song_name)
 
         check_all_time = scraped_song_id in get_previously_downloaded()
-        tempfile = os.path.join(ROOT_PATH, extra_paths, song_name[:-4] + "-vorbis.raw")
+        tempfile = os.path.join(Zcfg.get_root_path(), extra_paths, song_name[:-4] + "-vorbis.raw")
 
     except Exception as e:
         print("###   SKIPPING SONG - FAILED TO QUERY METADATA   ###")
@@ -1080,9 +1024,9 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
             if not is_playable:
                 print("###   SKIPPING:", song_name, "(SONG IS UNAVAILABLE)   ###")
             else:
-                if os.path.isfile(filename) and os.path.getsize(filename) and SKIP_EXISTING_FILES:
+                if os.path.isfile(filename) and os.path.getsize(filename) and Zcfg.get_skip_existing_files():
                     print("###   SKIPPING: (SONG ALREADY EXISTS) :", song_name, "   ###")
-                elif check_all_time and SKIP_PREVIOUSLY_DOWNLOADED:
+                elif check_all_time and Zcfg.get_skip_previously_downloaded():
                     print('###   SKIPPING: ' + song_name + ' (SONG ALREADY DOWNLOADED ONCE)   ###')
                 else:
                     if track_id_str != scraped_song_id:
@@ -1094,11 +1038,11 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
                     stream = SESSION.content_feeder().load(
                         track_id, VorbisOnlyAudioQuality(QUALITY), False, None)
 
-                    os.makedirs(ROOT_PATH + extra_paths,exist_ok=True)
+                    os.makedirs(Zcfg.get_root_path() + extra_paths,exist_ok=True)
 
                     total_size = stream.input_stream.size
                     downloaded = 0
-                    _CHUNK_SIZE = CHUNK_SIZE
+                    _CHUNK_SIZE = Zcfg.get_chunk_size()
                     fail = 0
                     bar_txt = song_name
                     if REALTIME_WAIT:
@@ -1132,13 +1076,13 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
                                 _CHUNK_SIZE = total_size - downloaded
                             if len(data) == 0 : 
                                 fail += 1                                
-                            if fail > REINTENT_DOWNLOAD:
+                            if fail > Zcfg.get_reintent_download():
                                 break
 
                     file.close()
 
                     convert_audio_format(tempfile, filename) # not actually converted if RAW_AUDIO_AS_IS                 
-                    if not RAW_AUDIO_AS_IS:
+                    if not Zcfg.get_raw_audio_as_is():
                         META_GENRE = genre
                         if USE_MUTAGEN:
                             set_audio_tags_mutagen(filename, artists, name, album_name,
@@ -1149,8 +1093,8 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
                             set_music_thumbnail(filename, image_url)
                         META_GENRE = False 
  
-                    if not OVERRIDE_AUTO_WAIT and not REALTIME_WAIT:
-                        time.sleep(ANTI_BAN_WAIT_TIME)
+                    if not Zcfg.get_override_auto_wait() and not REALTIME_WAIT:
+                        time.sleep(Zcfg.get_anti_ban_wait_time())
 
                     add_to_archive(scraped_song_id, os.path.basename(filename), artists[0], name)
         except Exception as e1:
@@ -1163,13 +1107,14 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
 
 def download_album(album):
     """ Downloads songs from an album """
+    print("download_album hit")
     global MULTI_CDS
     token = SESSION.tokens().get("user-read-email")
     artist, album_release_date, album_name, total_tracks = get_album_name(token, album)
     artist = sanitize_data(artist)
     album_name = sanitize_data(album_name)
     album_dir_str = f"{artist} - {album_release_date} - {album_name}"
-    if ALBUM_DIR_SHORT:
+    if Zcfg.get_album_dir_short:
         album_dir_str = f"{album_name}"
     tracks = get_album_tracks(token, album)
     print(f"\n  {artist} - ({album_release_date}) {album_name} [{total_tracks}]")
@@ -1213,7 +1158,7 @@ def get_albums_artist(access_token, artists_id):
     """ returns list of albums in a artist """
 
     offset = 0
-    limit = 50
+    limit = Zcfg.get_limit()
     include_groups = 'album,compilation'
 
     headers = {'Authorization': f'Bearer {access_token}'}
@@ -1259,7 +1204,7 @@ def download_playlist_by_id(playlist_id, playlist_name):
         # Simple pre-check of downloaded. A long playlist resumed after failure
         # can cause too many api hits in rapid succession.
         check_all_time = track_id in get_previously_downloaded()
-        if check_all_time and SKIP_PREVIOUSLY_DOWNLOADED:
+        if check_all_time and Zcfg.get_skip_previously_downloaded():
             print("GET PLAYLIST SONGS * PRE-CHECK\n")
             print("###   SKIPPING: " + song_name + " (SONG ALREADY DOWNLOADED ONCE)   ###\n")
 
@@ -1315,16 +1260,16 @@ def download_from_user_playlist():
 # Core functions here
 
 def check_raw():
-    #global RAW_AUDIO_AS_IS, MUSIC_FORMAT
     global MUSIC_FORMAT
-    if RAW_AUDIO_AS_IS:
+    if Zcfg.get_raw_audio_as_is():
         MUSIC_FORMAT = "ogg"
 
 
 def main():
     """ Main function """
     check_raw()
-    login()
+    #login()
+    #login2()
     client()
 
 
