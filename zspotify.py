@@ -50,7 +50,7 @@ from ini import Zcfg, MUSIC_FORMAT, IS_PODCAST, genre_cache, REALTIME_WAIT, CRED
 
 
 #SESSION: Session = None
-SESSION = login()
+#SESSION = login()
 
 # miscellaneous functions for general use
 
@@ -132,15 +132,18 @@ def splash():
 def client():
     """ Connects to spotify to perform query's and get songs to download """
     global QUALITY, REALTIME_WAIT, PLAYLIST_SONG_ALBUMS, SPLIT_ALBUM_CDS, CUSTOM_NAMING, CUSTOM_PATH
+    print("Client launched.")
     splash()
     CUSTOM_PATH = False
     CUSTOM_NAMING = False
 
-    token = SESSION.tokens().get("user-read-email")
+    #token = SESSION.tokens().get("user-read-email")
+    token = Zcfg.get_token()
     print("Client token")
-    token_for_saved = SESSION.tokens().get("user-library-read")
+    #token_for_saved = SESSION.tokens().get("user-library-read")
+    token_for_saved = Zcfg.get_token
 
-    if check_premium():
+    if Zcfg.check_premium():
         print("[ DETECTED PREMIUM ACCOUNT - USING VERY_HIGH QUALITY ]\n\n")
         QUALITY = AudioQuality.VERY_HIGH
     else:
@@ -324,7 +327,8 @@ def regex_input_for_urls(search_input):
 
 
 def get_episode_info(episode_id_str):
-    token = SESSION.tokens().get("user-read-email")
+    #token = SESSION.tokens().get("user-read-email")
+    token = Zcfg.get_token()
     info = json.loads(requests.get("https://api.spotify.com/v1/episodes/" +
                                    episode_id_str, headers={"Authorization": "Bearer %s" % token}).text)
 
@@ -436,7 +440,8 @@ def download_episode(episode_id_str):
 
 def search(search_term):
     """ Searches Spotify's API for relevant data """
-    token = SESSION.tokens().get("user-read-email")
+    #token = SESSION.tokens().get("user-read-email")
+    token = Zcfg.get_token()
 
     resp = requests.get(
         "https://api.spotify.com/v1/search",
@@ -563,7 +568,8 @@ def search(search_term):
 
 def get_artist_info(artist_id):
     """ Retrieves metadata for downloaded songs """
-    token = SESSION.tokens().get("user-read-email")
+    #token = SESSION.tokens().get("user-read-email")
+    token = Zcfg.get_token()
     try:
         info = json.loads(requests.get("https://api.spotify.com/v1/artists/" +
                           artist_id, headers={"Authorization": "Bearer %s" % token}).text)
@@ -590,7 +596,8 @@ def get_genre(artist_id):
 
 def get_song_info(song_id):
     """ Retrieves metadata for downloaded songs """
-    token = SESSION.tokens().get("user-read-email")
+    #token = SESSION.tokens().get("user-read-email")
+    token = Zcfg.get_token()
     try:
 
         info = json.loads(requests.get("https://api.spotify.com/v1/tracks?ids=" + song_id +
@@ -623,9 +630,9 @@ def get_song_info(song_id):
         print(e)
         print(song_id,info)
 
-def check_premium():
-    """ If user has spotify premium return true """
-    return bool((SESSION.get_user_attribute("type") == "premium") or Zcfg.get_force_premium())
+#def check_premium_old():
+#    """ If user has spotify premium return true """
+#    return bool((SESSION.get_user_attribute("type") == "premium") or Zcfg.get_force_premium())
 
 
 # Functions directly related to modifying the downloaded audio and its metadata
@@ -707,7 +714,7 @@ def set_audio_tags(filename, artists, name, album_name, release_year, disc_numbe
     tags['discnumber'] = disc_number
     tags['tracknumber'] = track_number
     tags['comment'] = 'id[spotify.com:track:'+track_id_str+']'
-    tags.save()
+    tags.save(v2_version=3)
 
 
 def set_audio_tags_mutagen(filename, artists, name, album_name, release_year, disc_number, track_number, track_id_str, image_url):
@@ -747,7 +754,7 @@ def set_audio_tags_mutagen(filename, artists, name, album_name, release_year, di
                             desc=u'' + album_name,
                             data=requests.get(image_url).content)
         tags['TCON'] = TCON(encoding=3, text=genre)              # TCON Genre
-        tags.save()
+        tags.save(v2_version=3)
 
     elif MUSIC_FORMAT == "ogg":
         tags = OggVorbis(filename)        
@@ -1035,8 +1042,10 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
                     track_id = TrackId.from_base62(track_id_str)
                     # print("###   FOUND SONG:", song_name, "   ###")
                     realtime_started = time.time()
-                    stream = SESSION.content_feeder().load(
-                        track_id, VorbisOnlyAudioQuality(QUALITY), False, None)
+                    #stream = SESSION.content_feeder().load(
+                    #    track_id, VorbisOnlyAudioQuality(QUALITY), False, None)
+
+                    stream = Zcfg.get_stream(track_id, QUALITY)
 
                     os.makedirs(Zcfg.get_root_path() + extra_paths,exist_ok=True)
 
@@ -1109,7 +1118,8 @@ def download_album(album):
     """ Downloads songs from an album """
     print("download_album hit")
     global MULTI_CDS
-    token = SESSION.tokens().get("user-read-email")
+    #token = SESSION.tokens().get("user-read-email")
+    token = Zcfg.get_token()
     artist, album_release_date, album_name, total_tracks = get_album_name(token, album)
     artist = sanitize_data(artist)
     album_name = sanitize_data(album_name)
@@ -1143,7 +1153,8 @@ def download_album(album):
 
 def download_artist_albums(artist):
     """ Downloads albums of an artist """
-    token = SESSION.tokens().get("user-read-email")
+    #token = SESSION.tokens().get("user-read-email")
+    token = Zcfg.get_token()
     albums = get_artist_albums(token, artist)
     total_albums = str(len(albums))
     print("Total Artist Albums to download: " + str(len(albums)) + "\n")
@@ -1171,7 +1182,8 @@ def get_albums_artist(access_token, artists_id):
 
 def download_playlist(playlists, playlist_choice):
     """Downloads all the songs from a playlist"""
-    token = SESSION.tokens().get("user-read-email")
+    #token = SESSION.tokens().get("user-read-email")
+    token = Zcfg.get_token()
     print("download_playlist:\nplaylists: " + playlists + "\n")
 
     playlist_songs = get_playlist_songs(
@@ -1189,7 +1201,8 @@ def download_playlist(playlists, playlist_choice):
 
 def download_playlist_by_id(playlist_id, playlist_name):
     """Downloads all the songs from a playlist using playlist id"""
-    token = SESSION.tokens().get("user-read-email")
+    #token = SESSION.tokens().get("user-read-email")
+    token = Zcfg.get_token()
 
     playlist_songs = get_playlist_songs(token, playlist_id)
     total_songs = len(playlist_songs)
@@ -1229,7 +1242,8 @@ def download_playlist_by_id(playlist_id, playlist_name):
 
 def download_from_user_playlist():
     """ Select which playlist(s) to download """
-    token = SESSION.tokens().get("user-read-email")
+    #token = SESSION.tokens().get("user-read-email")
+    token = Zcfg.get_token()
     playlists = get_all_playlists(token)
 
     count = 1
@@ -1268,7 +1282,7 @@ def check_raw():
 def main():
     """ Main function """
     check_raw()
-    #login()
+    login()
     #login2()
     client()
 

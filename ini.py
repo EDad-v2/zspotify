@@ -3,6 +3,7 @@ from getpass import getpass
 from appdirs import user_config_dir
 #from librespot.audio.decoders import AudioQuality, VorbisOnlyAudioQuality
 from librespot.core import Session
+from librespot.audio.decoders import AudioQuality, VorbisOnlyAudioQuality
 #from librespot.metadata import TrackId, EpisodeId
 
 
@@ -41,20 +42,23 @@ PLAYLIST_SONG_ALBUMS = False
 MULTI_CDS = False # not for humans to change!
 genre_cache = dict()
 CUSTOM_NAMING = False
-SESSION: Session = None
+#SESSION: Session = None
 
 
 def login():
     """ Authenticates with Spotify and saves credentials to a file """
-    global SESSION
+   # global SESSION
     
 
     if os.path.isfile(CREDENTIALS):
         try:
-            conf = Session.Configuration.Builder().set_stored_credential_file(CREDENTIALS).set_store_credentials(False).build()
+            #conf = Session.Configuration.Builder().set_stored_credential_file(CREDENTIALS).set_store_credentials(False).build()
             #SESSION = Session.Builder(conf).stored_file().create()
-            print("Session from creds")
-            return Session.Builder(conf).stored_file().create()
+            #print("Session from creds")
+            #return Session.Builder(conf).stored_file().create()
+            Zcfg.session_from_file()
+            print("Logged in from credentials.")
+            return
         except BaseException as e:
 
             print("\n\nLogin error! Is your stored credential file corrupt?\n")
@@ -65,10 +69,13 @@ def login():
         user_name = input("Username: ")
         password = getpass()
         try:
-            os.makedirs(CONFIG_DIR, exist_ok=True)
-            conf = Session.Configuration.Builder().set_stored_credential_file(CREDENTIALS).build()
+            #os.makedirs(CONFIG_DIR, exist_ok=True)
+            #conf = Session.Configuration.Builder().set_stored_credential_file(CREDENTIALS).build()
             #SESSION = Session.Builder(conf).user_pass(user_name, password).create()
-            return Session.Builder(conf).user_pass(user_name, password).create()
+            #return Session.Builder(conf).user_pass(user_name, password).create()
+            Zcfg.session_from_creds(user_name, password)
+            print("Logged in with name password.")
+            return
         except BaseException as e:
             print(f"Login error, Username or Pass incorrect?\n[!] ERROR {e} \n")
 
@@ -76,6 +83,7 @@ def login():
 class Zcfg:
     '''Get and set globals'''
     #pass
+    SESSION: Session = None
 
     @classmethod
     def get_root_path(cls) -> str:
@@ -157,4 +165,42 @@ class Zcfg:
         '''Returns REINTENT_DOWNLOAD int'''
         return REINTENT_DOWNLOAD
 
+    @classmethod
+    def session_from_file(cls):
+        conf = Session.Configuration.Builder().set_stored_credential_file(CREDENTIALS).set_store_credentials(False).build()
+        #SESSION = Session.Builder(conf).stored_file().create()
+        print("Session from creds")
+        session = Session.Builder(conf).stored_file().create()
+        #cls.SESSION = Session.Builder().stored_file().create()
 
+        if session.is_valid():
+            cls.SESSION = session
+            return
+        else:
+            print(f"Invalid credentials in {CREDENTIALS}")
+
+    @classmethod
+    def session_from_creds(cls, user_name, password):
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        conf = Session.Configuration.Builder().set_stored_credential_file(CREDENTIALS).build()
+        #SESSION = Session.Builder(conf).user_pass(user_name, password).create()
+        session = Session.Builder(conf).user_pass(user_name, password).create()
+
+        if session.is_valid():
+            cls.SESSION = session
+            return
+        else:
+            print("Login with name and password failed.")
+
+    @classmethod
+    def get_token(cls):
+        return cls.SESSION.tokens().get_token('user-read-email', 'playlist-read-private', 'user-library-read').access_token
+
+    @classmethod
+    def get_stream(cls, track_id, quality):
+        return cls.SESSION.content_feeder().load(
+            track_id, VorbisOnlyAudioQuality(quality), False, None)
+
+    @classmethod
+    def check_premium(cls):
+        return bool((cls.SESSION.get_user_attribute("type") == "premium") or cls.get_force_premium())
