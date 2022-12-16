@@ -49,11 +49,7 @@ else:
 from ini import Zcfg, MUSIC_FORMAT, IS_PODCAST, genre_cache, REALTIME_WAIT, CREDENTIALS, SPLIT_ALBUM_CDS, MULTI_CDS, login
 
 
-#SESSION: Session = None
-#SESSION = login()
-
 # miscellaneous functions for general use
-
 
 def clear():
     """ Clear the console window """
@@ -92,15 +88,14 @@ def realtime_wait(realtime_started, duration_ms, total_size, downloaded):
     delta_real = time.time() - time_start
     delta_want = (downloaded / total_size) * (duration_ms/1000)
     if delta_want > delta_real:
-        #need_wait = int(delta_want - delta_real)
         time.sleep(delta_want - delta_real)
 
 
 def sanitize_data(value):
     """ Returns given string with probl/ematic removed """
     sanitize = ["\\", "/", ":", "*", "?", "'", "<", ">", '"']
-    if "AC/DC" in value:
-        value = value.replace("/", "⚡") # replace forward slash with ⚡
+    if "AC/DC" in value: # Yeah... I love AC/DC, forward slash will nest DC dir into AC
+        value = value.replace("/", "⚡") # replace forward slash with ⚡, now looks snazzy!
 
     for i in sanitize:
         value = value.replace(i, "")
@@ -126,6 +121,27 @@ def splash():
     """)
     print(f"version: {__version__}")
 
+# Alt splash so I know we are in custom.
+def splash2():
+    '''Displays alt splash screen'''
+    # https://patorjk.com/software/taag/#p=display&f=Georgia11&t=Zspotify
+    print('''
+
+                                                                   
+                                              ,,      ,...         
+MMM"""AMV                              mm     db    .d' ""         
+M'   AMV                               MM           dM`            
+'   AMV   ,pP"Ybd `7MMpdMAo.  ,pW"Wq.mmMMmm `7MM   mMMmm`7M'   `MF'
+   AMV    8I   `"   MM   `Wb 6W'   `Wb MM     MM    MM    VA   ,V  
+  AMV   , `YMMMa.   MM    M8 8M     M8 MM     MM    MM     VA ,V   
+ AMV   ,M L.   I8   MM   ,AP YA.   ,A9 MM     MM    MM      VVV    
+AMVmmmmMM M9mmmP'   MMbmmd'   `Ybmd9'  `Mbmo.JMML..JMML.    ,V     
+                    MM                                     ,V      
+                  .JMML.                                OOb"       
+
+    ''')
+    print(f"version: {__version__}")
+
 
 # two mains functions for logging in and doing client stuff
 
@@ -133,7 +149,8 @@ def client():
     """ Connects to spotify to perform query's and get songs to download """
     global QUALITY, REALTIME_WAIT, PLAYLIST_SONG_ALBUMS, SPLIT_ALBUM_CDS, CUSTOM_NAMING, CUSTOM_PATH
     print("Client launched.")
-    splash()
+    #splash()
+    splash2()
     CUSTOM_PATH = False
     CUSTOM_NAMING = False
 
@@ -522,7 +539,6 @@ def search(search_term):
                             playlist_choice['name'].strip()) + "/")
                         print("\n")
             else:
-                #5eyTLELpc4Coe8oRTHkU3F
                 #print("==> position: ", position ," total_albums + total_tracks + total_playlists: ", position - total_albums - total_tracks - total_playlists )
                 artists_choice = artists[position - total_albums - total_tracks - total_playlists - 1]
                 albums = get_albums_artist(artists_choice['id'])
@@ -618,10 +634,6 @@ def get_song_info(song_id):
         print("###   get_song_info - FAILED TO QUERY METADATA   ###")
         print(e)
         print(song_id,info)
-
-#def check_premium_old():
-#    """ If user has spotify premium return true """
-#    return bool((SESSION.get_user_attribute("type") == "premium") or Zcfg.get_force_premium())
 
 
 # Functions directly related to modifying the downloaded audio and its metadata
@@ -860,9 +872,6 @@ def get_album_name(album_id):
     headers = {'Authorization': f'Bearer {token}'}
     resp = requests.get(
         f'https://api.spotify.com/v1/albums/{album_id}', headers=headers).json()
-    
-    #_yearalbum = re.search('(\d{4})', resp['release_date']).group(1)
-    #print(f"\n {resp['name']} - {_yearalbum} [{resp['total_tracks']}]")
 
     if m := re.search('(\d{4})', resp['release_date']):
         return resp['artists'][0]['name'], m.group(1),sanitize_data(resp['name']),resp['total_tracks']
@@ -952,14 +961,12 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
     """ Downloads raw song audio from Spotify """
     MUSIC_FORMAT = Zcfg.get_music_format()
     global META_GENRE
-    META_GENRE = False    
+    META_GENRE = False
+
     try:
-    	# TODO: ADD disc_number IF > 1 
         artists, album_name, name, image_url, release_year, disc_number, track_number, scraped_song_id, is_playable, artist_id, duration_ms = get_song_info(
             track_id_str)
 
-        #info = get_artist_info(artist_id)
-        #genre = conv_artist_format(info['genres'])
         genre = get_genre(artist_id)
  
         _artist = artists[0]
@@ -1037,11 +1044,7 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
                         track_id_str = scraped_song_id
 
                     track_id = TrackId.from_base62(track_id_str)
-                    # print("###   FOUND SONG:", song_name, "   ###")
                     realtime_started = time.time()
-                    #stream = SESSION.content_feeder().load(
-                    #    track_id, VorbisOnlyAudioQuality(QUALITY), False, None)
-
                     stream = Zcfg.get_stream(track_id, QUALITY)
 
                     os.makedirs(Zcfg.get_root_path() + extra_paths,exist_ok=True)
@@ -1059,7 +1062,6 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
                             bitrate = 160
                         elif QUALITY == AudioQuality.VERY_HIGH:
                             bitrate = 320
-                        #print("Bitrate is: " + str(bitrate * 125))
                         _CHUNK_SIZE = bitrate * 125
                         bar_txt = "\033[1;37;44m REALTIME \033[m " + bar_txt
                     with open(tempfile, 'wb') as file, tqdm(
@@ -1076,8 +1078,7 @@ def download_track(track_id_str: str, extra_paths="", prefix=False, prefix_value
                             downloaded += len(data)
                             if REALTIME_WAIT:
                                 realtime_wait(realtime_started, duration_ms, total_size, downloaded)                            
-                            bar.update(file.write(data))                           
-                            #print(f"[{total_size}][{_CHUNK_SIZE}] [{len(data)}] [{total_size - downloaded}] [{downloaded}]")
+                            bar.update(file.write(data)) 
                             if (total_size - downloaded) < _CHUNK_SIZE:
                                 _CHUNK_SIZE = total_size - downloaded
                             if len(data) == 0 : 
@@ -1171,7 +1172,6 @@ def get_albums_artist(artists_id):
 
     resp = requests.get(
         f'https://api.spotify.com/v1/artists/{artists_id}/albums', headers=headers, params=params).json()
-    #print("###   Album Name:", resp['items'], "###")
     return resp['items']
 
 def download_playlist(playlists, playlist_choice):
@@ -1269,7 +1269,6 @@ def main():
     """ Main function """
     check_raw()
     login()
-    #login2()
     client()
 
 
