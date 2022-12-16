@@ -485,13 +485,13 @@ def search(search_term):
     print("\n")
 
     artists = resp.json()["artists"]["items"]
-    total_artists = 0
+    #total_artists = 0
     print("###  ARTIST  ###")
     for artist in artists:
         #print("==> ",artist)
         print(f"{i}, {artist['name']} | {'/'.join(artist['genres'])}") 
         i += 1
-    total_artists = i - total_albums - total_tracks - total_playlists - 1
+    #total_artists = i - total_albums - total_tracks - total_playlists - 1
     print("\n")
 
     if len(tracks) + len(albums) + len(playlists) == 0:
