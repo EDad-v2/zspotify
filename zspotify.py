@@ -137,12 +137,6 @@ def client():
     CUSTOM_PATH = False
     CUSTOM_NAMING = False
 
-    #token = SESSION.tokens().get("user-read-email")
-    token = Zcfg.get_token()
-    print("Client token")
-    #token_for_saved = SESSION.tokens().get("user-library-read")
-    token_for_saved = Zcfg.get_token
-
     if Zcfg.check_premium():
         print("[ DETECTED PREMIUM ACCOUNT - USING VERY_HIGH QUALITY ]\n\n")
         QUALITY = AudioQuality.VERY_HIGH
@@ -178,7 +172,7 @@ def client():
             else:
                 print("With the flag playlist_id you must pass the playlist_id and the name of the folder where you will have the songs. Usually these name is the name of the playlist itself.")
         elif sys.argv[1] == "-ls" or sys.argv[1] == "--liked-songs":
-            for song in get_saved_tracks(token_for_saved):
+            for song in get_saved_tracks():
                 if not song['track']['name']:
                     print(
                         "###   SKIPPING:  SONG DOES NOT EXISTS ON SPOTIFY ANYMORE   ###")
@@ -196,12 +190,12 @@ def client():
             elif album_id_str is not None:
                 download_album(album_id_str)
             elif playlist_id_str is not None:
-                name, creator = get_playlist_info(token, playlist_id_str) 
+                name, creator = get_playlist_info(playlist_id_str) 
                 download_playlist_by_id(playlist_id_str, sanitize_data(name)) # download_playlist_by_id(), can replace above
             elif episode_id_str is not None:
                 download_episode(episode_id_str)
             elif show_id_str is not None:
-                for episode in get_show_episodes(token, show_id_str):
+                for episode in get_show_episodes(show_id_str):
                     download_episode(episode)
 
     else:
@@ -217,8 +211,8 @@ def client():
         elif album_id_str is not None:
             download_album(album_id_str)
         elif playlist_id_str is not None:
-            playlist_songs = get_playlist_songs(token, playlist_id_str)
-            name, creator = get_playlist_info(token, playlist_id_str)
+            playlist_songs = get_playlist_songs(playlist_id_str)
+            name, creator = get_playlist_info(playlist_id_str)
             for song in playlist_songs:
                 download_track(song['track']['id'],
                                sanitize_data(name) + "/")
@@ -226,7 +220,7 @@ def client():
         elif episode_id_str is not None:
             download_episode(episode_id_str)
         elif show_id_str is not None:
-            for episode in get_show_episodes(token, show_id_str):
+            for episode in get_show_episodes(show_id_str):
                 download_episode(episode)
         else:
             try:
@@ -327,7 +321,6 @@ def regex_input_for_urls(search_input):
 
 
 def get_episode_info(episode_id_str):
-    #token = SESSION.tokens().get("user-read-email")
     token = Zcfg.get_token()
     info = json.loads(requests.get("https://api.spotify.com/v1/episodes/" +
                                    episode_id_str, headers={"Authorization": "Bearer %s" % token}).text)
@@ -347,14 +340,15 @@ def get_episode_info(episode_id_str):
         return sanitize_data(info["show"]["name"]), sanitize_data(info["name"]), image_url, release_date, scraped_episode_id
 
 
-def get_show_episodes(access_token, show_id_str):
+def get_show_episodes(show_id_str):
     """ returns episodes of a show """
     episodes = []
     offset = 0
     limit = Zcfg.get_limit()
+    token =Zcfg.get_token()
 
     while True:
-        headers = {'Authorization': f'Bearer {access_token}'}
+        headers = {'Authorization': f'Bearer {token}'}
         params = {'limit': limit, 'offset': offset}
         resp = requests.get(
             f'https://api.spotify.com/v1/shows/{show_id_str}/episodes', headers=headers, params=params).json()
@@ -439,7 +433,6 @@ def download_episode(episode_id_str):
 
 def search(search_term):
     """ Searches Spotify's API for relevant data """
-    #token = SESSION.tokens().get("user-read-email")
     token = Zcfg.get_token()
 
     resp = requests.get(
@@ -452,7 +445,6 @@ def search(search_term):
         },
         headers={"Authorization": "Bearer %s" % token},
     )
-    #print("token: ",token)
 
     i = 1
     tracks = resp.json()["tracks"]["items"]
@@ -523,7 +515,7 @@ def search(search_term):
                 #print("==> position: ", position ," total_albums + total_tracks + total_playlists ", total_albums + total_tracks + total_playlists )
                 playlist_choice = playlists[position -
                                             total_tracks - total_albums - 1]
-                playlist_songs = get_playlist_songs(token, playlist_choice['id'])
+                playlist_songs = get_playlist_songs(playlist_choice['id'])
                 for song in playlist_songs:
                     if song['track']['id'] is not None:
                         download_track(song['track']['id'], sanitize_data(
@@ -533,7 +525,7 @@ def search(search_term):
                 #5eyTLELpc4Coe8oRTHkU3F
                 #print("==> position: ", position ," total_albums + total_tracks + total_playlists: ", position - total_albums - total_tracks - total_playlists )
                 artists_choice = artists[position - total_albums - total_tracks - total_playlists - 1]
-                albums = get_albums_artist(token,artists_choice['id'])
+                albums = get_albums_artist(artists_choice['id'])
                 i=0
 
                 print("\n")
@@ -567,7 +559,6 @@ def search(search_term):
 
 def get_artist_info(artist_id):
     """ Retrieves metadata for downloaded songs """
-    #token = SESSION.tokens().get("user-read-email")
     token = Zcfg.get_token()
     try:
         info = json.loads(requests.get("https://api.spotify.com/v1/artists/" +
@@ -595,7 +586,6 @@ def get_genre(artist_id):
 
 def get_song_info(song_id):
     """ Retrieves metadata for downloaded songs """
-    #token = SESSION.tokens().get("user-read-email")
     token = Zcfg.get_token()
     try:
 
@@ -789,14 +779,15 @@ def conv_artist_format(artists):
 
 
 # Extra functions directly related to spotify playlists
-def get_all_playlists(access_token):
+def get_all_playlists():
     """ Returns list of users playlists """
     playlists = []
     limit = Zcfg.get_limit()
     offset = 0
+    token =Zcfg.get_token()
 
     while True:
-        headers = {'Authorization': f'Bearer {access_token}'}
+        headers = {'Authorization': f'Bearer {token}'}
         params = {'limit': limit, 'offset': offset}
         resp = requests.get("https://api.spotify.com/v1/me/playlists",
                             headers=headers, params=params).json()
@@ -809,17 +800,19 @@ def get_all_playlists(access_token):
     return playlists
 
 
-def get_playlist_songs(access_token, playlist_id):
+def get_playlist_songs(playlist_id):
     """ returns list of songs in a playlist """
     songs = []
     offset = 0
     limit = 100
+    token =Zcfg.get_token()
 
     while True:
-        headers = {'Authorization': f'Bearer {access_token}'}
+        headers = {'Authorization': f'Bearer {token}'}
         params = {'limit': limit, 'offset': offset}
         resp = requests.get(
-            f'https://api.spotify.com/v1/playlists/{playlist_id}/tracks', headers=headers, params=params).json()
+            f'https://api.spotify.com/v1/playlists/{playlist_id}/tracks',
+            headers=headers, params=params).json()
         offset += limit
         songs.extend(resp['items'])
 
@@ -829,24 +822,26 @@ def get_playlist_songs(access_token, playlist_id):
     return songs
 
 
-def get_playlist_info(access_token, playlist_id):
+def get_playlist_info(playlist_id):
     """ Returns information scraped from playlist """
-    headers = {'Authorization': f'Bearer {access_token}'}
+    token =Zcfg.get_token()
+    headers = {'Authorization': f'Bearer {token}'}
     resp = requests.get(
         f'https://api.spotify.com/v1/playlists/{playlist_id}?fields=name,owner(display_name)&market=from_token', headers=headers).json()
     return resp['name'].strip(), resp['owner']['display_name'].strip()
 
 
 # Extra functions directly related to spotify albums
-def get_album_tracks(access_token, album_id):
+def get_album_tracks(album_id):
     """ Returns album tracklist """
     songs = []
     offset = 0
     limit = Zcfg.get_limit()
     include_groups = 'album,compilation'
+    token = Zcfg.get_token()
 
     while True:
-        headers = {'Authorization': f'Bearer {access_token}'}
+        headers = {'Authorization': f'Bearer {token}'}
         params = {'limit': limit, 'include_groups':include_groups, 'offset': offset}
         resp = requests.get(
             f'https://api.spotify.com/v1/albums/{album_id}/tracks', headers=headers, params=params).json()
@@ -859,9 +854,10 @@ def get_album_tracks(access_token, album_id):
     return songs
 
 
-def get_album_name(access_token, album_id):
+def get_album_name(album_id):
     """ Returns album name """
-    headers = {'Authorization': f'Bearer {access_token}'}
+    token = Zcfg.get_token()
+    headers = {'Authorization': f'Bearer {token}'}
     resp = requests.get(
         f'https://api.spotify.com/v1/albums/{album_id}', headers=headers).json()
     
@@ -873,16 +869,17 @@ def get_album_name(access_token, album_id):
     else: return resp['artists'][0]['name'], resp['release_date'],sanitize_data(resp['name']),resp['total_tracks']
 
 
-def get_artist_albums(access_token, artists_id):
+def get_artist_albums(artists_id):
     """ Returns artist's albums """
 
     albums = []
     offset = 0
     limit = Zcfg.get_limit
     include_groups = 'album,compilation'
+    token =Zcfg.get_token()
 
     while True:
-        headers = {'Authorization': f'Bearer {access_token}'}
+        headers = {'Authorization': f'Bearer {token}'}
         params = {'limit': limit, 'include_groups': include_groups, 'offset': offset}
 
         resp = requests.get(
@@ -898,14 +895,15 @@ def get_artist_albums(access_token, artists_id):
 # Extra functions directly related to our saved tracks
 
 
-def get_saved_tracks(access_token):
+def get_saved_tracks():
     """ Returns user's saved tracks """
     songs = []
     offset = 0
     limit = Zcfg.get_limit()
+    token =Zcfg.get_token()
 
     while True:
-        headers = {'Authorization': f'Bearer {access_token}'}
+        headers = {'Authorization': f'Bearer {token}'}
         params = {'limit': limit, 'offset': offset}
         resp = requests.get('https://api.spotify.com/v1/me/tracks',
                             headers=headers, params=params).json()
@@ -1117,15 +1115,13 @@ def download_album(album):
     """ Downloads songs from an album """
     print("download_album hit")
     global MULTI_CDS
-    #token = SESSION.tokens().get("user-read-email")
-    token = Zcfg.get_token()
-    artist, album_release_date, album_name, total_tracks = get_album_name(token, album)
+    artist, album_release_date, album_name, total_tracks = get_album_name(album)
     artist = sanitize_data(artist)
     album_name = sanitize_data(album_name)
     album_dir_str = f"{artist} - {album_release_date} - {album_name}"
     if Zcfg.get_album_dir_short:
         album_dir_str = f"{album_name}"
-    tracks = get_album_tracks(token, album)
+    tracks = get_album_tracks(album)
     print(f"\n  {artist} - ({album_release_date}) {album_name} [{total_tracks}]")
     disc_number_flag = False
     bar_txt = "Download Album"
@@ -1152,9 +1148,7 @@ def download_album(album):
 
 def download_artist_albums(artist):
     """ Downloads albums of an artist """
-    #token = SESSION.tokens().get("user-read-email")
-    token = Zcfg.get_token()
-    albums = get_artist_albums(token, artist)
+    albums = get_artist_albums(artist)
     total_albums = str(len(albums))
     print("Total Artist Albums to download: " + str(len(albums)) + "\n")
 
@@ -1164,14 +1158,15 @@ def download_artist_albums(artist):
         antiban_wait()
 
 
-def get_albums_artist(access_token, artists_id):
+def get_albums_artist(artists_id):
     """ returns list of albums in a artist """
 
     offset = 0
     limit = Zcfg.get_limit()
     include_groups = 'album,compilation'
+    token =Zcfg.get_token()
 
-    headers = {'Authorization': f'Bearer {access_token}'}
+    headers = {'Authorization': f'Bearer {token}'}
     params = {'limit': limit, 'include_groups': include_groups, 'offset': offset}
 
     resp = requests.get(
@@ -1181,13 +1176,9 @@ def get_albums_artist(access_token, artists_id):
 
 def download_playlist(playlists, playlist_choice):
     """Downloads all the songs from a playlist"""
-    #token = SESSION.tokens().get("user-read-email")
-    token = Zcfg.get_token()
-    print("download_playlist:\nplaylists: " + playlists + "\n")
 
     playlist_songs = get_playlist_songs(
-        token, playlists[int(playlist_choice) - 1]['id'])
-    print(json.dumps(playlist_songs, indent=2))
+        playlists[int(playlist_choice) - 1]['id'])
 
     for song in playlist_songs:
         if PLAYLIST_SONG_ALBUMS:
@@ -1200,10 +1191,8 @@ def download_playlist(playlists, playlist_choice):
 
 def download_playlist_by_id(playlist_id, playlist_name):
     """Downloads all the songs from a playlist using playlist id"""
-    #token = SESSION.tokens().get("user-read-email")
-    token = Zcfg.get_token()
 
-    playlist_songs = get_playlist_songs(token, playlist_id)
+    playlist_songs = get_playlist_songs(playlist_id)
     total_songs = len(playlist_songs)
     song_index = 1
     for song in playlist_songs:
@@ -1241,9 +1230,7 @@ def download_playlist_by_id(playlist_id, playlist_name):
 
 def download_from_user_playlist():
     """ Select which playlist(s) to download """
-    #token = SESSION.tokens().get("user-read-email")
-    token = Zcfg.get_token()
-    playlists = get_all_playlists(token)
+    playlists = get_all_playlists()
 
     count = 1
     for playlist in playlists:
