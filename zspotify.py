@@ -391,13 +391,12 @@ def download_episode(episode_id_str):
 
     else:
         episode_id = EpisodeId.from_base62(episode_id_str)
-        stream = SESSION.content_feeder().load(
-            episode_id, VorbisOnlyAudioQuality(QUALITY), False, None)
+
+        stream = Zcfg.get_stream(episode_id, QUALITY)
 
         os.makedirs(os.path.join(Zcfg.get_root_podcast_path(), podcast_name),exist_ok=True)
 
         total_size = stream.input_stream.size
-        data_left = total_size
         downloaded = 0
         _CHUNK_SIZE = Zcfg.get_chunk_size()
         fail = 0
