@@ -4,7 +4,7 @@ from appdirs import user_config_dir
 
 # from librespot.audio.decoders import AudioQuality, VorbisOnlyAudioQuality
 from librespot.core import Session
-from librespot.audio.decoders import AudioQuality, VorbisOnlyAudioQuality
+from librespot.audio.decoders import VorbisOnlyAudioQuality
 
 # from librespot.metadata import TrackId, EpisodeId
 
@@ -57,7 +57,6 @@ def login():
     if os.path.isfile(CREDENTIALS):
         try:
             Zcfg.session_from_file()
-            print("Logged in from credentials.")
             return
         except BaseException as e:
 
@@ -170,10 +169,7 @@ class Zcfg:
             .set_store_credentials(False)
             .build()
         )
-        # SESSION = Session.Builder(conf).stored_file().create()
-        print("Session from creds")
         session = Session.Builder(conf).stored_file().create()
-        # cls.SESSION = Session.Builder().stored_file().create()
 
         if session.is_valid():
             cls.SESSION = session
@@ -189,7 +185,6 @@ class Zcfg:
             .set_stored_credential_file(CREDENTIALS)
             .build()
         )
-        # SESSION = Session.Builder(conf).user_pass(user_name, password).create()
         session = Session.Builder(conf).user_pass(user_name, password).create()
 
         if session.is_valid():

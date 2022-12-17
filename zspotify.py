@@ -15,14 +15,9 @@ import re
 import sys
 import time
 
-# import shutil
-from getpass import getpass
 import datetime
-
 import requests
-from librespot.audio.decoders import AudioQuality, VorbisOnlyAudioQuality
-
-# from librespot.core import Session
+from librespot.audio.decoders import AudioQuality
 from librespot.metadata import TrackId, EpisodeId
 
 from tqdm import tqdm
@@ -67,7 +62,6 @@ from ini import (
     IS_PODCAST,
     genre_cache,
     REALTIME_WAIT,
-    CREDENTIALS,
     SPLIT_ALBUM_CDS,
     MULTI_CDS,
     login,
@@ -161,9 +155,9 @@ def splash():
 def splash2():
     """Displays alt splash screen"""
     # https://patorjk.com/software/taag/#p=display&f=Georgia11&t=Zspotify
+    print("\033[1;32;40m") # Font and background colors
     print(
         '''
-
                                                                    
                                               ,,      ,...         
 MMM"""AMV                              mm     db    .d' ""         
@@ -175,10 +169,10 @@ M'   AMV                               MM           dM`
 AMVmmmmMM M9mmmP'   MMbmmd'   `Ybmd9'  `Mbmo.JMML..JMML.    ,V     
                     MM                                     ,V      
                   .JMML.                                OOb"       
-
     '''
     )
-    print(f"version: {__version__}")
+    
+    print(f"version: {__version__}\n\033[m") # Version and reset font and background
 
 
 # two mains functions for logging in and doing client stuff
@@ -187,7 +181,6 @@ AMVmmmmMM M9mmmP'   MMbmmd'   `Ybmd9'  `Mbmo.JMML..JMML.    ,V
 def client():
     """Connects to spotify to perform query's and get songs to download"""
     global QUALITY, REALTIME_WAIT, PLAYLIST_SONG_ALBUMS, SPLIT_ALBUM_CDS, CUSTOM_NAMING, CUSTOM_PATH
-    print("Client launched.")
     # splash()
     splash2()
     CUSTOM_PATH = False
@@ -1432,7 +1425,6 @@ def download_track(
 
 def download_album(album):
     """Downloads songs from an album"""
-    print("download_album hit")
     global MULTI_CDS
     artist, album_release_date, album_name, total_tracks = get_album_name(album)
     artist = sanitize_data(artist)
